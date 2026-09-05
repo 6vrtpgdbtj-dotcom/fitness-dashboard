@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
   try {
     const organizationId = await getOrganizationId(user.id);
-    const metadata = await readSpreadsheetMetadata(parsed.data.spreadsheetUrl, user.id);
+    const metadata = await readSpreadsheetMetadata(parsed.data.spreadsheetUrl);
     const connection = await createSheetConnection({
       organizationId,
       connectedBy: user.id,

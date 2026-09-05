@@ -55,7 +55,7 @@ describe("POST /api/sheets", () => {
 
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toEqual({ id: "connection-1" });
-    expect(mocks.readSpreadsheetMetadata).toHaveBeenCalledWith("1AbCdEfGhIjKlMnOpQrStUvWxYz1234567890", "admin-1");
+    expect(mocks.readSpreadsheetMetadata).toHaveBeenCalledWith("1AbCdEfGhIjKlMnOpQrStUvWxYz1234567890");
     expect(mocks.createConnection).toHaveBeenCalledWith({
       organizationId: "organization-1",
       connectedBy: "admin-1",

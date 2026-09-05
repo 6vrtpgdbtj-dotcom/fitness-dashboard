@@ -21,7 +21,7 @@ describe("Google token encryption", () => {
   it("rejects a ciphertext whose authentication tag was tampered with", async () => {
     const { decryptSecret, encryptSecret } = await import("@/lib/google/crypto");
     const parts = encryptSecret("refresh-token").split(".");
-    parts[2] = Buffer.from("tampered-authentication-tag-123456").toString("base64url");
+    parts[1] = Buffer.alloc(16, 3).toString("base64url");
 
     expect(() => decryptSecret(parts.join("."))).toThrow();
   });

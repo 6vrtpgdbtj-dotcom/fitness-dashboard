@@ -42,7 +42,7 @@ export default async function SheetsSettingsPage() {
                 <div>
                   <p className="eyebrow">{connection.status}</p>
                   <h3>{connection.display_name}</h3>
-                  <p>담당: {connection.trainers?.[0]?.display_name ?? "공용 운영"} · 탭: {connection.sheet_tabs.map((tab) => tab.title).join(", ") || "탭 정보 대기"}</p>
+                  <p>담당: {connection.trainer?.display_name ?? "공용 운영"} · 탭: {connection.sheet_tabs.map((tab) => tab.title).join(", ") || "탭 정보 대기"}</p>
                 </div>
                 <div className="connection-meta">
                   <span>최근 성공: {connection.last_successful_sync_at ? new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(connection.last_successful_sync_at)) : "아직 없음"}</span>
