@@ -1,4 +1,6 @@
 import { saveMappingVersion } from "../save-mapping-version";
+import { mapColumns } from "../map-columns";
+import type { ConfirmedColumn, MappingDomain } from "../types";
 
 const state = vi.hoisted(() => ({ role: "admin", organizationId: "org-1", records: [] as Record<string, unknown>[], tabs: [] as Record<string, unknown>[], conflictOnce: false }));
 vi.mock("server-only", () => ({}));
@@ -73,4 +75,24 @@ it("retries a concurrent version-number collision with a new insert", async () =
   state.conflictOnce = true;
   expect(await saveMappingVersion(input)).toEqual({ id: "mapping-3", version: 3 });
   expect(state.records.map((row) => row.version)).toEqual([1, 2, 3]);
+});
+
+it("persists a fixed-size SHA-256 fingerprint for 1,000 long headers while retaining the complete schema", async () => {
+  const columns = Array.from({ length: 1000 }, (_, index) => ({ sourceHeader: `${index}:${"경계".repeat(245)}`, field: index === 0 ? "name" : null }));
+  await saveMappingVersion({ ...input, columns });
+  const stored = state.records[1];
+  expect(new TextEncoder().encode(String(stored.mapping_fingerprint)).length).toBeLessThan(100);
+  expect(stored.mapping_fingerprint).toMatch(/^mapping:v2:sha256:[a-f0-9]{64}$/);
+  expect(stored.columns).toMatchObject({ fields: columns });
+});
+
+it("reuses the saved name/unmapped/notes mapping for duplicate headers on the next run", async () => {
+  await saveMappingVersion({ ...input, headerRowIndex: 0, columns: [{ sourceHeader: "회원명", field: "name" }, { sourceHeader: "메모", field: null }, { sourceHeader: "메모", field: "notes" }] });
+  const stored = state.records[1];
+  const columns = stored.columns as { domain: MappingDomain; headerRowIndex: number; fields: ConfirmedColumn[] };
+  const result = mapColumns({ organizationId: "org-1", sourceConnectionId: connectionId, sourceTabId: tabId, domain: "member", tabTitle: "회원", rows: [["회원명", "메모", "메모"], ["민수", "운영 메모", "운동 주의사항"]] }, [{
+    organizationId: String(stored.organization_id), sourceConnectionId: String(stored.source_connection_id), sourceTabId: String(stored.source_tab_id), version: Number(stored.version), domain: columns.domain, headerRowIndex: columns.headerRowIndex, columns: columns.fields,
+  }]);
+  expect(result.fields.map((column) => column.field)).toEqual(["name", null, "notes"]);
+  expect(result.mappingFingerprint).toBe(stored.mapping_fingerprint);
 });

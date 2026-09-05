@@ -122,6 +122,30 @@ describe("confirmed mapping history", () => {
     const result = mapColumns(input([["누군가", "누 군가", "등록일"], ["민수", "코치", "2026-09-01"]]), history);
     expect(accepted(result, "name")).toBeUndefined();
   });
+
+  it("restores ordered duplicate-header confirmations when the complete schema is unchanged", () => {
+    const result = mapColumns(input([["회원명", "메모", "메모"], ["민수", "내부 메모", "운동 주의사항"]], { domain: "member" }), [{
+      ...scope, domain: "member", version: 1, headerRowIndex: 0,
+      columns: [{ sourceHeader: "회원명", field: "name" }, { sourceHeader: "메모", field: null }, { sourceHeader: "메모", field: "notes" }],
+    }]);
+    expect(result.fields.map((column) => column.field)).toEqual(["name", null, "notes"]);
+    expect(result.fields[1]).toMatchObject({ confidence: 1, match: "history", reason: "confirmed-unmapped" });
+    expect(result.fields[2]).toMatchObject({ confidence: 1, match: "history", reason: "accepted" });
+  });
+
+  it.each([
+    { rows: [["회원명", "메모", "메모", "추가"], ["민수", "내부", "운동", ""]] },
+    { rows: [["메모", "회원명", "메모"], ["내부", "민수", "운동"]] },
+    { rows: [[], ["회원명", "메모", "메모"], ["민수", "내부", "운동"]] },
+  ])("does not carry duplicate positions across a schema change: %j", ({ rows }) => {
+    const result = mapColumns(input(rows, { domain: "member" }), [{
+      ...scope, domain: "member", version: 1, headerRowIndex: 0,
+      columns: [{ sourceHeader: "회원명", field: "name" }, { sourceHeader: "메모", field: null }, { sourceHeader: "메모", field: "notes" }],
+    }]);
+    expect(accepted(result, "name")).toBeDefined();
+    expect(accepted(result, "notes")).toBeUndefined();
+    expect(result.fields.filter((column) => column.sourceHeader === "메모").every((column) => column.reason === "duplicate-header")).toBe(true);
+  });
 });
 
 describe("column value profiling", () => {

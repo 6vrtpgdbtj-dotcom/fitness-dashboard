@@ -18,6 +18,8 @@ export type ConfirmedColumn = { sourceHeader: string; field: string | null };
 export type ConfirmedMapping = MappingScope & {
   domain: MappingDomain;
   version: number;
+  /** Include the saved header row and complete ordered columns for positional reuse. */
+  headerRowIndex?: number;
   columns: readonly ConfirmedColumn[];
 };
 export type ColumnMapping = {

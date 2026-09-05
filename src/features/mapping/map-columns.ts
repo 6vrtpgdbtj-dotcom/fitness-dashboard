@@ -1,12 +1,14 @@
+import { createHash } from "node:crypto";
 import { canonicalFields, missingRequiredFields, type CanonicalField } from "./canonical-fields";
 import { normalizeHeader } from "./header-normalizer";
 import { isNonEmpty, profileColumn, sampleValue } from "./value-profiler";
 import type { ColumnMapping, ColumnProfile, ConfirmedMapping, MappingInput, MappingResult, MappingDomain } from "./types";
 
 export function mappingFingerprint(domain: MappingDomain, headerRowIndex: number | null, headers: readonly string[]): string {
-  // Canonical JSON is collision-free and portable in both browser and server runtimes.
-  // It contains schema only, never sample values, tenant credentials or member data.
-  return `mapping:v1:${JSON.stringify([domain, headerRowIndex, headers.map(normalizeHeader)])}`;
+  // Discovery runs on the server; the client receives a serializable MappingResult.
+  // Keep the indexed value bounded regardless of the number/length of source headers.
+  const schema = JSON.stringify([domain, headerRowIndex, headers.map(normalizeHeader)]);
+  return `mapping:v2:sha256:${createHash("sha256").update(schema, "utf8").digest("hex")}`;
 }
 
 function aliases(field: CanonicalField): string[] {
@@ -60,19 +62,28 @@ export function mapColumns(input: MappingInput, history: ConfirmedMapping[] = []
   }
   const headers = headerRowIndex === null ? [] : input.rows[headerRowIndex].map((value) => typeof value === "string" ? value : "");
   const normalized = headers.map(normalizeHeader);
+  // Duplicate labels are only identifiable by position in a complete, unchanged schema.
+  // Legacy history without a header row can still reuse unique labels, never positions.
+  const orderedConfirmation = latest.length === 1 && latest[0].headerRowIndex === headerRowIndex &&
+    latest[0].columns.length === headers.length &&
+    latest[0].columns.every((column, index) => normalizeHeader(column.sourceHeader) === normalized[index])
+    ? latest[0].columns : undefined;
   const fields: ColumnMapping[] = headers.map((sourceHeader, columnIndex) => {
     const key = normalized[columnIndex];
+    const duplicateHeader = normalized.filter((header) => header === key).length > 1;
+    const positional = orderedConfirmation?.[columnIndex];
+    const historicalField = positional && (positional.field === null || definitions.some((field) => field.id === positional.field))
+      ? positional.field : !duplicateHeader ? confirmed.get(key) : undefined;
     const values = input.rows.slice((headerRowIndex ?? -1) + 1).map((row) => row[columnIndex]);
     const profile = profileColumn(values);
-    const phoneColumn = confirmed.get(key) === "phone_last4" || definitions.some((field) => field.id === "phone_last4" && aliases(field).includes(key));
+    const phoneColumn = historicalField === "phone_last4" || definitions.some((field) => field.id === "phone_last4" && aliases(field).includes(key));
     const samples = values.filter(isNonEmpty).slice(0, 3).map((value) => phoneColumn ? `***-****-${String(value).replace(/\D/g, "").slice(-4)}` : sampleValue(value));
     const base: ColumnMapping = { columnIndex, sourceHeader, normalizedHeader: key, sampleValues: samples, profile, field: null, proposedField: null, confidence: 0, margin: 0, match: "none", reason: "unknown" };
     if (!key) return base;
-    if (normalized.filter((header) => header === key).length > 1) return { ...base, reason: "duplicate-header" };
-    if (confirmed.has(key)) {
-      const field = confirmed.get(key)!;
-      return { ...base, field, proposedField: field, confidence: 1, margin: 1, match: "history", reason: field ? "accepted" : "confirmed-unmapped" };
+    if (historicalField !== undefined) {
+      return { ...base, field: historicalField, proposedField: historicalField, confidence: 1, margin: 1, match: "history", reason: historicalField ? "accepted" : "confirmed-unmapped" };
     }
+    if (duplicateHeader) return { ...base, reason: "duplicate-header" };
     const hasKnown = definitions.some((field) => aliases(field).includes(key));
     const candidates = definitions.map((definition) => {
       const exact = normalizeHeader(definition.id) === key || normalizeHeader(definition.label) === key;
