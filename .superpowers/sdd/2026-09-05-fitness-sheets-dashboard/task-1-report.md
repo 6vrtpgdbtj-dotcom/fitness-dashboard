@@ -24,3 +24,22 @@
 ## Note
 
 `public/fonts/README.md` documents the two required licensed font filenames. CSS is already wired to self-hosted `PretendardVariable.woff2` and `Archivo-Variable.woff2`, but the binary font files were not present in the supplied repository and were not invented or downloaded without a verified license source.
+
+## Round 1 fix — self-hosted fonts and OAuth settings
+
+### Root cause
+
+The original `@font-face` declarations referenced files that did not exist under `public/fonts`, so a production browser requested missing assets. The environment example named a Google service-account credential pair, which does not match the administrator-only OAuth consent flow.
+
+### Correction
+
+- Added `PretendardVariable.woff2` from the upstream Pretendard repository and `Archivo-Variable.ttf` from Google Fonts' Archivo directory. Both are distributed under SIL Open Font License 1.1; `public/fonts/OFL.txt` and `public/fonts/README.md` retain the license, upstream paths, axes, and SHA-256 digests.
+- Corrected CSS declarations to use `woff2-variations` with Pretendard `wght` 45–920 and `truetype-variations` with Archivo `wght` 100–900 and `wdth` 62–125.
+- Replaced the service-account fields with `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`, and `NEXT_PUBLIC_APP_URL`. The local callback example is `http://localhost:3000/api/google/callback`; production must register the matching HTTPS URL with Google.
+
+### Round 1 verification
+
+- `pnpm vitest run src/components/__tests__/app-shell.test.tsx` — 2/2 tests passed.
+- `pnpm lint` — exit 0.
+- `pnpm build` — exit 0.
+- Started the production build and requested both public assets: `GET /fonts/PretendardVariable.woff2` returned `200 font/woff2` (2,057,688 bytes); `GET /fonts/Archivo-Variable.ttf` returned `200 font/ttf` (658,596 bytes).
