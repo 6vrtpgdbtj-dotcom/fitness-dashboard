@@ -3,7 +3,9 @@ import type { MappingDomain } from "../mapping/types";
 import type { CanonicalRow, FieldIssue, NormalizedRow, NormalizedValues } from "./types";
 
 export function redactPhones(text: string): string {
-  return text.replace(/(?:\+82[- .]?)?0?1[016789][- .]?\d{3,4}[- .]?(\d{4})(?!\d)/g, "[전화끝4자리:$1]");
+  // Korean mobile, geographic, VoIP and service prefixes; allow common displayed
+  // punctuation and country-code notation without matching inside longer numbers.
+  return text.replace(/(?<![\d+])(?:\+82[\s./-]*\(?0?|\(?0)(?:1[016789]|2|[3-6][1-5]|70|80|50[2-8])\)?[\s./-]*\d{3,4}[\s./-]*\d{4}(?!\d)/g, "[전화번호 삭제]");
 }
 function text(value: unknown): string | null {
   if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") return null;
@@ -79,7 +81,7 @@ export function normalizeFields(domain: MappingDomain, row: CanonicalRow): Norma
       let hour = Number(local[2]);
       const validHour = local[1] ? hour >= 1 && hour <= 12 : hour <= 23;
       if (local[1]) hour = hour % 12 + (local[1] === "오후" ? 12 : 0);
-      if (validHour && Number(local[3]) < 60 && Number(local[4] ?? 0) < 60) values.starts_at = `${values.class_date}T${String(hour).padStart(2, "0")}:${local[3]}:${local[4] ?? "00"}+09:00`;
+      if (validHour && Number(local[3]) < 60 && Number(local[4] ?? 0) < 60) values.starts_at = new Date(`${values.class_date}T${String(hour).padStart(2, "0")}:${local[3]}:${local[4] ?? "00"}+09:00`).toISOString();
     } else if (/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|[+-](?:0\d|1[0-4]):[0-5]\d)$/.test(start) && parseDate(start.slice(0, 10)) && Number.isFinite(Date.parse(start))) values.starts_at = new Date(start).toISOString();
     if (!values.starts_at) { values.starts_at = null; issue("starts_at", "invalid_time"); }
   }

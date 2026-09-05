@@ -121,12 +121,74 @@ describe("sync persistence", () => {
     expect(JSON.stringify([db.snapshots, db.records(), db.audits()])).not.toMatch(/010[- ]?(1234|9999)/);
   });
 
+  it.each(["02-1234-5678", "(010) 1234-5678", "010/1234/5678", "+82 (10) 1234.5678", "031 123 5678"])("scrubs %s from raw, text and audit deltas while preserving the mapped suffix", async (phone) => {
+    const db = database();
+    const fields = ["external_member_id", "name", "phone_last4", "notes"];
+    await applySync(input([["M1", "민수", phone, `연락 ${phone}`]], "member", fields), db.db);
+    await applySync(input([["M1", "민수", phone, "전화 요청 취소"]], "member", fields), db.db);
+    expect(db.snapshots[0].sourcePayload.rows[1]).toEqual(["M1", "민수", "5678", "연락 [전화번호 삭제]"]);
+    expect(db.records()[0].values.phone_last4).toBe("5678");
+    expect(db.audits()[1].changes.notes).toEqual({ before: "연락 [전화번호 삭제]", after: "전화 요청 취소" });
+    expect(normalizeMember({ name: "민수", notes: `연락 ${phone}` }).values.notes).toBe("연락 [전화번호 삭제]");
+    expect(JSON.stringify([db.snapshots, db.records(), db.audits()])).not.toContain(phone);
+  });
+
   it("scopes upserts by organization and rejects blank rows without inventing members", async () => {
     const db = database();
     const sheet = input([["R1", "민수", "2026-09-01", 600000], ["", "", "", ""]]);
     expect((await applySync(sheet, db.db)).registration.rejected).toBe(1);
     await applySync({ ...sheet, organizationId: "org-2" }, db.db);
     expect(db.records()).toHaveLength(2);
+  });
+
+  it("scrubs a legacy full phone value before recording it in an audit delta", async () => {
+    const db = database();
+    const sheet = input([["M1", "민수", "기존 메모"]], "member", ["external_member_id", "name", "notes"]);
+    await applySync(sheet, db.db);
+    const previous = db.records()[0];
+    await db.db.transaction(db.snapshots[0].scope, async (tx) => {
+      await tx.upsert({ ...previous, values: { ...previous.values, notes: "연락 (010) 1234-5678" } });
+    });
+    await applySync(input([["M1", "민수", "취소"]], "member", ["external_member_id", "name", "notes"]), db.db);
+    expect(db.audits()[1].changes.notes).toEqual({ before: "연락 [전화번호 삭제]", after: "취소" });
+  });
+
+  it("counts only the committed transaction attempt and adds each collision issue once", async () => {
+    const db = database();
+    const retry = new Error("serialization retry");
+    const repository: SyncRepository = { ...db.db, async transaction(scope, operation) {
+      try {
+        await db.db.transaction(scope, async (tx) => { await operation(tx); throw retry; });
+      } catch (error) { if (error !== retry) throw error; }
+      return db.db.transaction(scope, operation);
+    } };
+    const result = await applySync(input([["R1", "민수", "2026-09-01", 600000], ["R2", "서연", "2026-09-01", 500000], ["R2", "서연", "2026-09-01", 700000], ["", "", "", ""]]), repository);
+    expect(result.registration).toEqual({ inserted: 1, updated: 0, unchanged: 0, reviewRequired: 2, rejected: 1 });
+    expect(db.records().find((record) => record.record_status === "review_required")?.issues.filter((issue) => issue.code === "duplicate_identity")).toHaveLength(1);
+    expect(db.audits()).toHaveLength(2);
+  });
+
+  it.each([
+    { reason: "different join hints", rows: [["R1", "민수", "2026-09-01", 600000], ["R1", "서연", "2026-09-01", 600000]] },
+    { reason: "different field issues", rows: [["R1", "민수", "2026-09-01", ""], ["R1", "민수", "2026-09-01", "bad"]] },
+  ])("keeps collision selection stable when equal values have $reason", async ({ rows }) => {
+    const db = database();
+    await applySync(input(rows), db.db);
+    const first = db.records()[0];
+    await applySync(input([...rows].reverse()), db.db);
+    expect(db.records()[0].hints).toEqual(first.hints);
+    expect(db.records()[0].issues).toEqual(first.issues);
+    expect(db.audits()).toHaveLength(1);
+  });
+
+  it("does not update or audit a class when a local time changes to its equivalent UTC timestamp", async () => {
+    const db = database();
+    const fields = ["external_class_id", "name", "class_date", "starts_at"];
+    await applySync(input([["C1", "민수", "2026-09-01", "오후 2:30"]], "class", fields), db.db);
+    const result = await applySync(input([["C1", "민수", "2026-09-01", "2026-09-01T05:30:00Z"]], "class", fields), db.db);
+    expect(result.class).toMatchObject({ unchanged: 1, updated: 0 });
+    expect(db.records()[0].values.starts_at).toBe("2026-09-01T05:30:00.000Z");
+    expect(db.audits()).toHaveLength(1);
   });
 });
 
@@ -143,7 +205,7 @@ describe("domain normalization", () => {
     expect(normalizeLead({ name: "민수", lead_date: "09/01/26", status: "알수없음" }).issues.map((issue) => issue.field)).toEqual(expect.arrayContaining(["lead_date", "status"]));
   });
   it("normalizes local class time in Asia/Seoul and class attendance", () => {
-    expect(normalizeClass({ name: "민수", class_date: "2026-09-01", starts_at: "오후 2:30", status: "출석", deducted_sessions: "1" })).toMatchObject({ values: { class_date: "2026-09-01", starts_at: "2026-09-01T14:30:00+09:00", status: "completed", deducted_sessions: 1 }, issues: [] });
+    expect(normalizeClass({ name: "민수", class_date: "2026-09-01", starts_at: "오후 2:30", status: "출석", deducted_sessions: "1" })).toMatchObject({ values: { class_date: "2026-09-01", starts_at: "2026-09-01T05:30:00.000Z", status: "completed", deducted_sessions: 1 }, issues: [] });
   });
   it("hashes canonical identity without delimiter ambiguity and isolates connections and tabs", () => {
     expect(sourceRecordKey("c", "t", "id")).toMatch(/^[a-f0-9]{64}$/);
