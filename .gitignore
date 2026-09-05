@@ -1,0 +1,12 @@
+.worktrees/
+.superpowers/
+node_modules/
+.next/
+coverage/
+playwright-report/
+test-results/
+.env*
+!.env.example
+outputs/
+*.png
+*.inspect.ndjson
