@@ -20,6 +20,7 @@
     "zod": "^4.1.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@eslint/eslintrc": "^3.3.1",
     "@next/eslint-plugin-next": "^15.5.25",
     "@playwright/test": "^1.55.0",
