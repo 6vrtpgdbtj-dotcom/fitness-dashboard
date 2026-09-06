@@ -3,9 +3,43 @@ import type { MappingDomain } from "../mapping/types";
 import type { CanonicalRow, FieldIssue, NormalizedRow, NormalizedValues } from "./types";
 
 export function redactPhones(text: string): string {
-  // Korean mobile, geographic, VoIP and service prefixes; allow common displayed
-  // punctuation and country-code notation without matching inside longer numbers.
-  return text.replace(/(?<![\d+])(?:\+82[\s./-]*\(?0?|\(?0)(?:1[016789]|2|[3-6][1-5]|70|80|50[2-8])\)?[\s./-]*\d{3,4}[\s./-]*\d{4}(?!\d)/g, "[전화번호 삭제]");
+  // Tokenize whole digit groups instead of enumerating every punctuation/prefix
+  // combination. Bounded windows also find phones beside dates or other numbers.
+  const groups = [...text.matchAll(/\(?\+?\d+\)?/g)];
+  let output = "";
+  let copiedUntil = 0;
+  for (let first = 0; first < groups.length; first++) {
+    const start = groups[first].index!;
+    // Avoid cutting an ASCII identifier, date component or currency amount.
+    if (/(?:[A-Za-z0-9_][-./]?|[₩$])$/.test(text.slice(Math.max(0, start - 2), start))) continue;
+    for (let last = first; last < groups.length && last < first + 6; last++) {
+      if (last > first) {
+        const previousEnd = groups[last - 1].index! + groups[last - 1][0].length;
+        if (!/^[ \t./-]*$/.test(text.slice(previousEnd, groups[last].index))) break;
+      }
+      const end = groups[last].index! + groups[last][0].length;
+      const candidate = text.slice(start, end);
+      let digits = candidate.replace(/\D/g, "");
+      if (digits.length > 15) break;
+      if (/^\d+\.\d+$/.test(candidate) || /[A-Za-z0-9_원₩$]/.test(text.slice(end, end + 1))) continue;
+      if (candidate.includes("+")) {
+        if (!/^\(?\+82/.test(candidate)) continue;
+        // +82 (0)10..., +82 10..., and +82 010... have one domestic trunk zero.
+        digits = `0${digits.slice(2).replace(/^0/, "")}`;
+      }
+      const domestic = /^0[1-9]\d{7,9}$/.test(digits);
+      // National service numbers use a visible 4+4 grouping. Do not erase bare
+      // eight-digit prices/IDs just because they start with 1.
+      const service = /^1[568]\d{6}$/.test(digits) && last === first + 1
+        && /^\d{4}$/.test(groups[first][0]) && /^\d{4}$/.test(groups[last][0]);
+      if (!domestic && !service) continue;
+      output += `${text.slice(copiedUntil, start)}[전화번호 삭제]`;
+      copiedUntil = end;
+      first = last;
+      break;
+    }
+  }
+  return output + text.slice(copiedUntil);
 }
 function text(value: unknown): string | null {
   if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") return null;

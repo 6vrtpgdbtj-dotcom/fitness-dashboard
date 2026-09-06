@@ -121,7 +121,7 @@ describe("sync persistence", () => {
     expect(JSON.stringify([db.snapshots, db.records(), db.audits()])).not.toMatch(/010[- ]?(1234|9999)/);
   });
 
-  it.each(["02-1234-5678", "(010) 1234-5678", "010/1234/5678", "+82 (10) 1234.5678", "031 123 5678"])("scrubs %s from raw, text and audit deltas while preserving the mapped suffix", async (phone) => {
+  it.each(["02-1234-5678", "(010) 1234-5678", "010/1234/5678", "+82 (10) 1234.5678", "031 123 5678", "+821012345678"])("scrubs %s from raw, text and audit deltas while preserving the mapped suffix", async (phone) => {
     const db = database();
     const fields = ["external_member_id", "name", "phone_last4", "notes"];
     await applySync(input([["M1", "민수", phone, `연락 ${phone}`]], "member", fields), db.db);
@@ -139,6 +139,31 @@ describe("sync persistence", () => {
     expect((await applySync(sheet, db.db)).registration.rejected).toBe(1);
     await applySync({ ...sheet, organizationId: "org-2" }, db.db);
     expect(db.records()).toHaveLength(2);
+  });
+
+  it.each([
+    { phone: "+82 (0)10-1234-5678", suffix: "5678" },
+    { phone: "1588-1234", suffix: "1234" },
+  ])("scrubs $phone across snapshot, notes, insertion and legacy update audits", async ({ phone, suffix }) => {
+    const db = database();
+    const fields = ["external_member_id", "name", "phone_last4", "notes"];
+    await applySync(input([["M1", "민수", phone, `연락 ${phone}`]], "member", fields), db.db);
+    expect(db.snapshots[0].sourcePayload.rows[1]).toEqual(["M1", "민수", suffix, "연락 [전화번호 삭제]"]);
+    expect(db.records()[0].values.notes).toBe("연락 [전화번호 삭제]");
+    expect(db.audits()[0].changes.notes).toEqual({ before: null, after: "연락 [전화번호 삭제]" });
+    expect(normalizeMember({ name: "민수", notes: phone }).values.notes).toBe("[전화번호 삭제]");
+    const previous = db.records()[0];
+    await db.db.transaction(db.snapshots[0].scope, async (tx) => {
+      await tx.upsert({ ...previous, values: { ...previous.values, notes: `이전 ${phone}` } });
+    });
+    await applySync(input([["M1", "민수", phone, `변경 ${phone}`]], "member", fields), db.db);
+    expect(db.audits()[1].changes.notes).toEqual({ before: "이전 [전화번호 삭제]", after: "변경 [전화번호 삭제]" });
+    expect(JSON.stringify([db.snapshots, db.records(), db.audits()])).not.toContain(phone);
+  });
+
+  it("preserves dates, money and embedded IDs while scrubbing adjacent phone groups", () => {
+    const notes = "2026-09-06 1588-1234 / 600,000원 / ₩15881234 / ID-M01012345678 / R-1588-1234 / 12345678 / 1234-5678";
+    expect(normalizeMember({ name: "민수", notes }).values.notes).toBe("2026-09-06 [전화번호 삭제] / 600,000원 / ₩15881234 / ID-M01012345678 / R-1588-1234 / 12345678 / 1234-5678");
   });
 
   it("scrubs a legacy full phone value before recording it in an audit delta", async () => {
