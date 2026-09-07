@@ -45,10 +45,12 @@ export function getSyncService() {
         const rows: unknown[][] = values.data.values ?? [];
         const previous = checked(await db.from("sheet_tabs").select("id,domain,is_active").eq("organization_id", connection.organizationId).eq("source_connection_id", connection.id).eq("google_sheet_id", tab.googleSheetId).maybeSingle());
         if (previous?.is_active === false) continue;
-        const domain: MappingDomain | null = previous?.domain ?? discoverDomain(tab.title, rows);
-        const stored = checked(await db.from("sheet_tabs").upsert({ organization_id: connection.organizationId, source_connection_id: connection.id, google_sheet_id: tab.googleSheetId, title: tab.title, domain }, { onConflict: "organization_id,source_connection_id,google_sheet_id" }).select("id").single());
+        const proposedDomain: MappingDomain | null = previous?.domain ?? discoverDomain(tab.title, rows);
+        const stored = await rpc<{ id: string; domain: MappingDomain | null; is_active: boolean }>(db, "sync_upsert_tab", { p_organization_id: connection.organizationId, p_connection_id: connection.id, p_lease: lease, p_google_sheet_id: tab.googleSheetId, p_title: tab.title, p_domain: proposedDomain });
         if (!stored) throw new Error("Could not save the source tab.");
-        if (domain) prepared.push({ tab, rows, domain, tabId: stored.id });
+        // The fenced RPC resolves the latest scoped administrator-confirmed
+        // domain before an ambiguous tab can be skipped.
+        if (stored.is_active && stored.domain) prepared.push({ tab, rows, domain: stored.domain, tabId: stored.id });
       }
       prepared.sort((a, b) => Number(b.domain === "member") - Number(a.domain === "member"));
       for (const { tab, rows, domain, tabId } of prepared) {
@@ -69,37 +71,32 @@ export function getSyncService() {
           }
         }
         if (!version) throw new Error("Mapping history changed concurrently.");
-        checked(await db.from("sheet_tabs").update({ header_row: mapping.headerRowIndex === null ? null : mapping.headerRowIndex + 1, headers: mapping.fields.map((field) => field.sourceHeader) }).eq("id", tabId).eq("organization_id", connection.organizationId));
+        await rpc(db, "sync_update_tab_mapping", { p_organization_id: connection.organizationId, p_connection_id: connection.id, p_lease: lease, p_tab_id: tabId, p_header_row: mapping.headerRowIndex === null ? null : mapping.headerRowIndex + 1, p_headers: mapping.fields.map((field) => field.sourceHeader) });
         const result = await applySync({ ...scope, trainerId: connection.trainerId, rows, mapping, mappingVersionId: version.id, capturedAt: new Date().toISOString() }, createRpcSyncRepository(db, lease));
         for (const key of Object.keys(total) as MappingDomain[]) for (const count of Object.keys(total[key]) as Array<keyof SyncResult[MappingDomain]>) total[key][count] += result[key][count];
       }
       return total;
     },
     async findWatch(channelId) {
-      const row = checked(await database().from("sync_watches").select("channel_id,source_connection_id,resource_id,expires_at,last_message_number").eq("channel_id", channelId).maybeSingle());
+      const row = checked(await database().from("sync_watches").select("channel_id,source_connection_id,resource_id,expires_at,last_message_number").eq("channel_id", channelId).is("stopped_at", null).maybeSingle());
       // Cursor comparison happens in PostgreSQL numeric, never a JS number.
       return row ? { channelId: row.channel_id, connectionId: row.source_connection_id, resourceId: row.resource_id, expiration: new Date(row.expires_at), lastMessageNumber: "0", token: "" } : null;
     },
-    async saveWatch(watch) {
-      const db = database();
-      checked(await db.from("sync_watches").upsert({ channel_id: watch.channelId, source_connection_id: watch.connectionId, resource_id: watch.resourceId, expires_at: watch.expiration.toISOString() }, { onConflict: "channel_id" }));
-      if (watch.resourceId) {
-        checked(await db.from("sheet_connections").update({ watch_channel_id: watch.channelId, watch_resource_id: watch.resourceId, watch_expires_at: watch.expiration.toISOString(), last_message_number: null }).eq("id", watch.connectionId));
-        // Renew first, then stop old channels. During overlap both remain valid.
-        const previous = checked(await db.from("sync_watches").select("channel_id,resource_id,expires_at").eq("source_connection_id", watch.connectionId).neq("channel_id", watch.channelId));
-        for (const old of previous ?? []) {
-          try { if (old.resource_id) await deps.stopWatch({ channelId: old.channel_id, connectionId: watch.connectionId, resourceId: old.resource_id, expiration: new Date(old.expires_at), token: "", lastMessageNumber: "0" }); await deps.removeWatch(old.channel_id); }
-          catch { /* An old channel expires naturally; it remains verifiable. */ }
-        }
-      }
+    async saveWatch(watch, lease) {
+      const previous = await rpc<Watch | null>(database(), "sync_save_watch", { p_connection_id: watch.connectionId, p_lease: lease, p_channel_id: watch.channelId, p_resource_id: watch.resourceId, p_expires_at: watch.expiration.toISOString() });
+      return previous ? { ...previous, expiration: new Date(previous.expiration) } : null;
     },
-    async removeWatch(channelId) { checked(await database().from("sync_watches").delete().eq("channel_id", channelId)); },
+    async removeWatch(watch, lease) { await rpc(database(), "sync_watch_cleanup", { p_connection_id: watch.connectionId, p_lease: lease, p_channel_id: watch.channelId, p_remove: true }); },
     async createWatch(connection: Connection, watch: Watch, address) {
       const auth = await getAuthorizedGoogleClient(connection.id);
       const response = await google.drive({ version: "v3", auth }).files.watch({ fileId: connection.spreadsheetId, requestBody: { id: watch.channelId, type: "web_hook", token: watch.token, address, expiration: String(watch.expiration.getTime()) } }, { timeout: 15000 });
       return { resourceId: response.data.resourceId ?? "", expiration: new Date(Number(response.data.expiration)) };
     },
-    async stopWatch(watch) { const auth = await getAuthorizedGoogleClient(watch.connectionId); await google.drive({ version: "v3", auth }).channels.stop({ requestBody: { id: watch.channelId, resourceId: watch.resourceId } }, { timeout: 15000 }); },
+    async stopWatch(watch, lease) {
+      const auth = await getAuthorizedGoogleClient(watch.connectionId);
+      const selected = await rpc<Watch>(database(), "sync_watch_cleanup", { p_connection_id: watch.connectionId, p_lease: lease, p_channel_id: watch.channelId, p_remove: false });
+      await google.drive({ version: "v3", auth }).channels.stop({ requestBody: { id: selected.channelId, resourceId: selected.resourceId ?? watch.resourceId } }, { timeout: 15000 });
+    },
     acceptNotification: (watch, number) => rpc(database(), "sync_accept_notification", { p_channel_id: watch.channelId, p_resource_id: watch.resourceId, p_message_number: number }),
     candidates: (now) => rpc(database(), "sync_candidates", { p_now: now.toISOString() }),
   };

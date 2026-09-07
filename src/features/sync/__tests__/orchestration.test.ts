@@ -22,8 +22,8 @@ function fixture() {
     execute: async (connection) => { synced.push(connection.id); return { member: { inserted: 1, updated: 0, unchanged: 0, reviewRequired: 0, rejected: 0 }, registration: { inserted: 0, updated: 0, unchanged: 0, reviewRequired: 0, rejected: 0 }, lead: { inserted: 0, updated: 0, unchanged: 0, reviewRequired: 0, rejected: 0 }, class: { inserted: 0, updated: 0, unchanged: 0, reviewRequired: 0, rejected: 0 } }; },
     finish: async (id, _lease, result) => { if (!result.ok) failures.push(`${id}:${result.code}`); },
     findWatch: async (id) => watches.get(id) ?? null,
-    saveWatch: async (watch) => { watches.set(watch.channelId, watch); },
-    removeWatch: async (id) => { watches.delete(id); },
+    saveWatch: async (watch) => { watches.set(watch.channelId, structuredClone(watch)); return null; },
+    removeWatch: async (watch) => { watches.delete(watch.channelId); },
     createWatch: async (_connection, watch) => { renewed.push(watch.connectionId); return { resourceId: "resource", expiration: new Date("2026-09-07T00:00:00Z") }; },
     stopWatch: async () => {},
     acceptNotification: async (watch, number) => { const current = watches.get(watch.channelId)!; if (BigInt(number) <= BigInt(current.lastMessageNumber)) return false; current.lastMessageNumber = number; jobs.add(`${watch.channelId}:${number}`); return true; },
@@ -78,7 +78,7 @@ describe("orchestration", () => {
   it("stops a newly created remote watch when activating it in storage fails", async () => {
     const f = fixture(); const stopped: string[] = [];
     const save = f.deps.saveWatch;
-    f.deps.saveWatch = async (watch) => { if (watch.resourceId) throw new Error("storage unavailable"); await save(watch); };
+    f.deps.saveWatch = async (watch, lease) => { if (watch.resourceId) throw new Error("storage unavailable"); return save(watch, lease); };
     f.deps.stopWatch = async (watch) => { stopped.push(watch.resourceId!); };
     await expect(f.service.registerWatch("a")).rejects.toThrow("storage unavailable");
     expect(stopped).toEqual(["resource"]); expect(f.watches.size).toBe(0); expect(f.locks.size).toBe(0);
@@ -88,6 +88,25 @@ describe("orchestration", () => {
     watch.expiration = new Date("2026-09-05");
     expect(await f.service.accept(new Headers({ "x-goog-resource-state": "update", "x-goog-channel-id": watch.channelId, "x-goog-channel-token": watch.token, "x-goog-resource-id": "resource", "x-goog-message-number": "2" }))).toEqual({ status: 403 });
     expect(f.jobs.size).toBe(0);
+  });
+  it("cleans only the predecessor returned by a successful fenced activation", async () => {
+    const f = fixture(); const stopped: string[] = []; const leaseArguments: string[] = [];
+    const prior: Watch = { channelId: "prior", connectionId: "a", resourceId: "prior-resource", token: "", expiration: new Date("2026-09-07"), lastMessageNumber: "1" };
+    f.deps.saveWatch = async (watch, lease) => { leaseArguments.push(lease); return watch.resourceId ? prior : null; };
+    f.deps.stopWatch = async (watch, lease) => { leaseArguments.push(lease); stopped.push(watch.channelId); };
+    f.deps.removeWatch = async (_watch, lease) => { leaseArguments.push(lease); };
+    await f.service.registerWatch("a");
+    expect(stopped).toEqual(["prior"]);
+    expect(leaseArguments).toEqual(["lease", "lease", "lease", "lease"]);
+  });
+  it("leaves activated channels intact when cleanup fails after activation", async () => {
+    const f = fixture(); const stopped: string[] = [];
+    const save = f.deps.saveWatch;
+    f.deps.saveWatch = async (watch, lease) => { await save(watch, lease); return watch.resourceId ? { ...watch, channelId: "prior" } : null; };
+    f.deps.stopWatch = async (watch) => { stopped.push(watch.channelId); throw new Error("lease_lost"); };
+    const created = await f.service.registerWatch("a");
+    expect(stopped).toEqual(["prior"]);
+    expect(f.watches.get(created.channelId)?.resourceId).toBe("resource");
   });
   it("serializes the same connection and releases the lock after expired credentials", async () => {
     const f = fixture(); let unblock!: () => void;

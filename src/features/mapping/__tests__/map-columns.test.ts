@@ -9,6 +9,20 @@ const input = (rows: unknown[][], extra: Partial<MappingInput> = {}): MappingInp
 const accepted = (result: ReturnType<typeof mapColumns>, field: string) => result.fields.find((column) => column.field === field);
 
 describe("sheet column discovery", () => {
+  it.each([0, 60])("uses the administrator's complete one-column header at row %i before automatic detection", (headerRowIndex) => {
+    const rows: unknown[][] = Array.from({ length: headerRowIndex }, () => ["intro"]);
+    rows.push(["별명"], ["민수"]);
+    const history: ConfirmedMapping[] = [{ ...scope, domain: "member", version: 1, headerRowIndex, columns: [{ sourceHeader: "별명", field: "name" }] }];
+    const result = mapColumns(input(rows, { domain: "member" }), history);
+    expect(result.headerRowIndex).toBe(headerRowIndex);
+    expect(result.fields.map((field) => field.field)).toEqual(["name"]);
+    expect(result.missingRequiredFields).toEqual([]);
+  });
+  it("does not promote a saved header position after its complete schema changes", () => {
+    const history: ConfirmedMapping[] = [{ ...scope, domain: "member", version: 1, headerRowIndex: 0, columns: [{ sourceHeader: "별명", field: "name" }] }];
+    const result = mapColumns(input([["별명", "new column"], ["민수", "data"]], { domain: "member" }), history);
+    expect(result.headerRowIndex).toBeNull();
+  });
   it.each(threeTrainerSheets)("maps $tabTitle independently of titles, row offsets and column order", (fixture) => {
     const result = mapColumns(input(fixture.rows, { tabTitle: fixture.tabTitle }), []);
     expect(result.headerRowIndex).toBe(fixture.headerRowIndex);

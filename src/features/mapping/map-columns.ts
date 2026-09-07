@@ -46,6 +46,18 @@ export function mapColumns(input: MappingInput, history: ConfirmedMapping[] = []
   }
   let headerRowIndex: number | null = input.headerRowIndex !== undefined && Number.isInteger(input.headerRowIndex) && input.headerRowIndex >= 0 && input.headerRowIndex < input.rows.length ? input.headerRowIndex : null;
   if (input.headerRowIndex === undefined) {
+    const saved = latest.length === 1 ? latest[0] : undefined;
+    const savedIndex = saved?.headerRowIndex;
+    // An administrator can confirm a single-column schema or a header outside
+    // the discovery window. Use its position only while the entire ordered
+    // schema still matches; a partial match must fall back to discovery.
+    if (saved && savedIndex !== undefined && Number.isInteger(savedIndex) && savedIndex >= 0 && savedIndex < input.rows.length &&
+      saved.columns.length > 0 && saved.columns.length === input.rows[savedIndex].length &&
+      saved.columns.every((column, index) => typeof input.rows[savedIndex][index] === "string" && normalizeHeader(column.sourceHeader) === normalizeHeader(String(input.rows[savedIndex][index])))) {
+      headerRowIndex = savedIndex;
+    }
+  }
+  if (input.headerRowIndex === undefined && headerRowIndex === null) {
     let best = 1;
     input.rows.slice(0, 50).forEach((row, index) => {
       const matched = new Set<string>();

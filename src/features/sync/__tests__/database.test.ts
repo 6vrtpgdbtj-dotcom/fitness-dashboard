@@ -19,6 +19,7 @@ beforeAll(async () => {
   await db.exec("create role anon; create role authenticated; create role service_role bypassrls; create schema auth; create table auth.users(id uuid primary key); create function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;");
   await db.exec(await readFile(resolve("supabase/migrations/202609050001_initial_schema.sql"), "utf8"));
   await db.exec(await readFile(resolve("supabase/migrations/202609060001_sync_orchestration.sql"), "utf8"));
+  await db.exec(await readFile(resolve("supabase/migrations/202609080001_fence_sync_metadata.sql"), "utf8"));
   await db.query("insert into auth.users(id) values ($1)", [profile]);
   await db.query("insert into profiles(id,organization_id,role,is_active) values ($1,$2,'admin',true)", [profile, org]);
   await db.query("insert into sheet_connections(id,organization_id,spreadsheet_id,display_name,connected_by) values ($1,$2,'sheet','Sheet',$3)", [connection, org, profile]);
@@ -28,6 +29,55 @@ beforeAll(async () => {
 afterAll(async () => { await db.close(); });
 
 describe("sync migration on PostgreSQL", () => {
+  it("resolves a scoped confirmed domain on an ambiguous tab before deciding whether to ingest", async () => {
+    const lease = await call<string>("sync_acquire", { p_connection_id: connection, p_reason: "manual" });
+    try {
+      await db.query("insert into sheet_tabs(organization_id,source_connection_id,google_sheet_id,title) values($1,$2,99,'기타')", [org, connection]);
+      const ambiguous = (await db.query<{ id: string }>("select id from sheet_tabs where google_sheet_id=99")).rows[0].id;
+      await db.query("insert into mapping_versions(organization_id,source_connection_id,source_tab_id,version,mapping_fingerprint,mapping_confidence,confirmed_by,columns) values($1,$2,$3,1,'older',1,$4,'{\"domain\":\"lead\"}'),($1,$2,$3,2,'confirmed',1,$4,$5)", [org, connection, ambiguous, profile, JSON.stringify({ domain: "member", headerRowIndex: 0, fields: [{ sourceHeader: "별명", field: "name" }] })]);
+      const stored = await call<{ id: string; domain: string }>("sync_upsert_tab", { p_organization_id: org, p_connection_id: connection, p_lease: lease, p_google_sheet_id: 99, p_title: "기타", p_domain: null });
+      expect(stored).toMatchObject({ id: ambiguous, domain: "member" });
+      const unrelated = await call<{ domain: string | null }>("sync_upsert_tab", { p_organization_id: org, p_connection_id: connection, p_lease: lease, p_google_sheet_id: 100, p_title: "기타", p_domain: null });
+      expect(unrelated.domain).toBeNull();
+    } finally { await call("sync_release", { p_connection_id: connection, p_lease: lease }); }
+  });
+  it("fences tab titles, domains, and header metadata after a lease takeover", async () => {
+    const oldLease = await call<string>("sync_acquire", { p_connection_id: connection, p_reason: "manual" });
+    await db.exec("update sync_leases set expires_at=now() - interval '1 second'");
+    const currentLease = await call<string>("sync_acquire", { p_connection_id: connection, p_reason: "manual" });
+    const args = { p_organization_id: org, p_connection_id: connection, p_lease: currentLease, p_google_sheet_id: 0, p_title: "Current", p_domain: "member" };
+    try {
+      await call("sync_upsert_tab", args);
+      await call("sync_update_tab_mapping", { p_organization_id: org, p_connection_id: connection, p_lease: currentLease, p_tab_id: tab, p_header_row: 61, p_headers: ["별명"] });
+      await expect(call("sync_upsert_tab", { ...args, p_lease: oldLease, p_title: "STALE", p_domain: "lead" })).rejects.toThrow("lease_lost");
+      await expect(call("sync_update_tab_mapping", { p_organization_id: org, p_connection_id: connection, p_lease: oldLease, p_tab_id: tab, p_header_row: 1, p_headers: ["STALE"] })).rejects.toThrow("lease_lost");
+      expect((await db.query("select title,domain,header_row,headers from sheet_tabs where id=$1", [tab])).rows[0]).toEqual({ title: "Current", domain: "member", header_row: 61, headers: ["별명"] });
+    } finally { await call("sync_release", { p_connection_id: connection, p_lease: currentLease }); }
+  });
+  it("atomically activates watches and authorizes cleanup of only the selected predecessor", async () => {
+    const oldLease = await call<string>("sync_acquire", { p_connection_id: connection, p_reason: "watch" });
+    const save = (lease: string, channel: string, resource: string | null) => call<{ channelId: string } | null>("sync_save_watch", { p_connection_id: connection, p_lease: lease, p_channel_id: channel, p_resource_id: resource, p_expires_at: new Date(Date.now() + 86400000).toISOString() });
+    await save(oldLease, "old-worker", null);
+    await db.exec("update sync_leases set expires_at=now() - interval '1 second'");
+    const lease = await call<string>("sync_acquire", { p_connection_id: connection, p_reason: "watch" });
+    try {
+      await save(lease, "current-worker", null);
+      expect(await save(lease, "current-worker", "current-resource")).toBeNull();
+      await expect(save(oldLease, "old-worker", "old-resource")).rejects.toThrow("lease_lost");
+      const cleanup = { p_connection_id: connection, p_lease: oldLease, p_channel_id: "current-worker", p_remove: false };
+      await expect(call("sync_watch_cleanup", cleanup)).rejects.toThrow("lease_lost");
+      expect((await db.query<{ watch_channel_id: string }>("select watch_channel_id from sheet_connections where id=$1", [connection])).rows[0].watch_channel_id).toBe("current-worker");
+      await save(lease, "renewed-worker", null);
+      expect(await save(lease, "renewed-worker", "renewed-resource")).toMatchObject({ channelId: "current-worker" });
+      expect(await call("sync_watch_cleanup", { ...cleanup, p_lease: lease })).toMatchObject({ channelId: "current-worker", resourceId: "current-resource" });
+      await expect(call("sync_watch_cleanup", { ...cleanup, p_lease: lease, p_channel_id: "old-worker" })).rejects.toThrow("watch_cleanup_forbidden");
+      await expect(call("sync_watch_cleanup", { ...cleanup, p_lease: lease, p_channel_id: "renewed-worker" })).rejects.toThrow("watch_cleanup_forbidden");
+      await expect(save(lease, "current-worker", "current-resource")).rejects.toThrow("watch_retired");
+      await call("sync_watch_cleanup", { ...cleanup, p_lease: lease, p_remove: true });
+      await expect(save(lease, "current-worker", null)).rejects.toThrow("watch_retired");
+      expect(await call("sync_accept_notification", { p_channel_id: "current-worker", p_resource_id: "current-resource", p_message_number: "2" })).toBe(false);
+    } finally { await call("sync_release", { p_connection_id: connection, p_lease: lease }); await db.query("update sheet_connections set watch_channel_id=null,watch_resource_id=null,watch_expires_at=null where id=$1", [connection]); }
+  });
   it("serializes connections, applies atomic record history, and refuses a stale fencing token", async () => {
     const lease = await call<string>("sync_acquire", { p_connection_id: connection, p_reason: "manual" });
     expect(lease).toMatch(/^[a-f0-9-]+$/);

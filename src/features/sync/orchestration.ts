@@ -13,10 +13,11 @@ export type SyncDependencies = {
   execute(connection: Connection, lease: string): Promise<SyncResult>;
   finish(id: string, lease: string, result: { ok: true; data: SyncResult } | { ok: false; code: string; retryable: boolean }): Promise<void>;
   findWatch(channelId: string): Promise<Watch | null>;
-  saveWatch(watch: Watch): Promise<void>;
-  removeWatch(channelId: string): Promise<void>;
+  /** Fenced persistence; activation returns only its atomically selected predecessor. */
+  saveWatch(watch: Watch, lease: string): Promise<Watch | null>;
+  removeWatch(watch: Watch, lease: string): Promise<void>;
   createWatch(connection: Connection, watch: Watch, address: string): Promise<{ resourceId: string; expiration: Date }>;
-  stopWatch(watch: Watch): Promise<void>;
+  stopWatch(watch: Watch, lease: string): Promise<void>;
   /** Atomically advance the numeric cursor AND insert the durable pending job. */
   acceptNotification(watch: Watch, messageNumber: string): Promise<boolean>;
   candidates(now: Date): Promise<Array<{ connectionId: string; sync: boolean; renew: boolean }>>;
@@ -53,18 +54,28 @@ export function createSyncService(deps: SyncDependencies) {
     if (!lease) throw failure("sync_busy");
     const channelId = randomUUID();
     const watch: Watch = { channelId, connectionId, token: tokenFor(deps.secret, connectionId, channelId), resourceId: null, expiration: new Date(deps.now().getTime() + 24 * 60 * 60 * 1000), lastMessageNumber: "0" };
+    let activated = false;
     try {
       // Persist before files.watch: Google can send its initial sync before the
       // watch response returns. Pending watches ignore that initial handshake.
-      await deps.saveWatch(watch);
+      await deps.saveWatch(watch, lease);
       const registered = await deps.createWatch(connection, watch, deps.notificationUrl);
       Object.assign(watch, registered);
       if (!registered.resourceId || !Number.isFinite(registered.expiration.getTime()) || registered.expiration <= deps.now()) throw new Error("Google returned an invalid watch.");
-      await deps.saveWatch({ ...watch, ...registered });
+      const previous = await deps.saveWatch({ ...watch, ...registered }, lease);
+      activated = true;
+      if (previous) {
+        try { if (previous.resourceId) await deps.stopWatch(previous, lease); await deps.removeWatch(previous, lease); }
+        catch { /* Activation succeeded. Its predecessor expires naturally if cleanup loses its lease. */ }
+      }
       return { channelId, expiration: registered.expiration };
     } catch (error) {
-      if (watch.resourceId) { try { await deps.stopWatch(watch); } catch { /* Remote expiration remains the final cleanup. */ } }
-      await deps.removeWatch(channelId);
+      if (!activated) {
+        // Storage may have activated the channel even if its response was lost.
+        // The cleanup RPC rejects current channels and stale/foreign leases.
+        try { if (watch.resourceId) await deps.stopWatch(watch, lease); await deps.removeWatch(watch, lease); }
+        catch { /* Leave the channel to expire if fenced cleanup is unavailable. */ }
+      }
       throw error;
     } finally { await deps.release(connectionId, lease); }
   }
