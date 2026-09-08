@@ -1,0 +1,285 @@
+import type { UserScope } from "@/lib/auth/user-scope";
+import type {
+  AnalyticsRows,
+  DashboardData,
+  DateRange,
+  MemberSummary,
+  RevenuePoint,
+} from "./types";
+
+const dayMs = 86400000;
+export const koreaToday = () =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+export function parsePeriod(start: unknown, end: unknown): DateRange | null {
+  const valid = (value: unknown): value is string =>
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(value)) &&
+    new Date(value).toISOString().slice(0, 10) === value;
+  if (
+    !valid(start) ||
+    !valid(end) ||
+    start > end ||
+    Date.parse(end) - Date.parse(start) > 366 * dayMs
+  )
+    return null;
+  return { start, end };
+}
+export function currentMonth(today = koreaToday()): DateRange {
+  const date = new Date(`${today}T00:00:00Z`);
+  return {
+    start: `${today.slice(0, 7)}-01`,
+    end: new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0))
+      .toISOString()
+      .slice(0, 10),
+  };
+}
+const within = (date: string | null, period: DateRange) =>
+  date !== null && date >= period.start && date <= period.end;
+const sum = <T>(rows: T[], value: (row: T) => number | null) =>
+  rows.reduce((total, row) => total + Number(value(row) ?? 0), 0);
+const average = <T>(rows: T[], value: (row: T) => number | null) => {
+  const known = rows.filter((row) => value(row) !== null);
+  return known.length ? sum(known, value) / known.length : null;
+};
+const addDays = (date: string, days: number) =>
+  new Date(Date.parse(date) + days * dayMs).toISOString().slice(0, 10);
+
+/** Receives rows already protected by database RLS; repeats trainer filtering as defense in depth.
+ * Dates are inclusive Korean calendar dates. Revenue is gross paid, refunds separate.
+ * Renewal pace uses completed deducted sessions over the trailing 28 days, not a forecast claim. */
+export function buildDashboardData(
+  input: AnalyticsRows,
+  scope: UserScope,
+  period: DateRange,
+  today = koreaToday(),
+): DashboardData {
+  if (scope.role === "trainer" && !scope.trainerId)
+    throw new Error("trainer_scope_required");
+  if (!parsePeriod(period.start, period.end)) throw new Error("invalid_period");
+  const permitted = <
+    T extends { trainer_id: string | null; record_status: string },
+  >(
+    items: T[],
+  ) =>
+    items.filter(
+      (row) =>
+        row.record_status === "valid" &&
+        (scope.role === "admin" || row.trainer_id === scope.trainerId),
+    );
+  const rows: AnalyticsRows = {
+    members: permitted(input.members),
+    registrations: permitted(input.registrations),
+    leads: permitted(input.leads),
+    classes: permitted(input.classes),
+    trainers: input.trainers.filter(
+      (row) => scope.role === "admin" || row.id === scope.trainerId,
+    ),
+    connections: scope.role === "admin" ? input.connections : [],
+  };
+  const registrations = rows.registrations.filter((row) =>
+    within(row.registration_date, period),
+  );
+  const paid = registrations.filter((row) => row.status === "paid");
+  const refunded = registrations.filter((row) => row.status === "refunded");
+  const consultations = rows.leads.filter(
+    (row) =>
+      within(row.consultation_date, period) &&
+      ["consulted", "registered", "not_registered"].includes(row.status ?? ""),
+  );
+  const converted = consultations.filter(
+    (row) => row.is_registered === true || row.status === "registered",
+  );
+  const completedClasses = rows.classes.filter(
+    (row) => row.status === "completed" && within(row.class_date, period),
+  );
+  const trainerName = (id: string | null) =>
+    rows.trainers.find((row) => row.id === id)?.display_name ?? "담당 미지정";
+  const members: MemberSummary[] = rows.members.map((member) => {
+    const completed = rows.classes
+      .filter(
+        (row) =>
+          row.member_id === member.id &&
+          row.status === "completed" &&
+          row.class_date &&
+          row.class_date <= today,
+      )
+      .sort(
+        (a, b) =>
+          (b.class_date ?? "").localeCompare(a.class_date ?? "") ||
+          (b.starts_at ?? "").localeCompare(a.starts_at ?? ""),
+      );
+    const remaining =
+      completed.find((row) => row.remaining_sessions !== null)
+        ?.remaining_sessions ?? member.remaining_sessions;
+    const consumption = sum(
+      completed.filter((row) =>
+        within(row.class_date, { start: addDays(today, -27), end: today }),
+      ),
+      (row) => row.deducted_sessions,
+    );
+    const estimated =
+      remaining !== null && consumption > 0
+        ? addDays(
+            today,
+            Math.ceil(Math.max(0, Number(remaining)) / (consumption / 28)),
+          )
+        : null;
+    return {
+      id: member.id,
+      name: member.name ?? "이름 미확인",
+      trainerId: member.trainer_id,
+      trainerName: trainerName(member.trainer_id),
+      status: member.status,
+      remainingSessions: remaining === null ? null : Number(remaining),
+      expectedDepletionDate: member.expected_end_date ?? estimated,
+      estimateBasis: member.expected_end_date
+        ? "source"
+        : estimated
+          ? "pace"
+          : null,
+      lastClassDate: completed[0]?.class_date ?? null,
+    };
+  });
+  const activeMembers = members.filter(
+    (member) => member.status !== "ended" && member.status !== "inactive",
+  );
+  const revenue: RevenuePoint[] = [];
+  for (
+    let month = period.start.slice(0, 7);
+    month <= period.end.slice(0, 7);
+
+  ) {
+    const current = paid.filter((row) =>
+      row.registration_date?.startsWith(month),
+    );
+    revenue.push({
+      month,
+      newRevenue: sum(
+        current.filter((row) => row.registration_type === "new"),
+        (row) => row.paid_amount,
+      ),
+      renewedRevenue: sum(
+        current.filter((row) => row.registration_type === "renewal"),
+        (row) => row.paid_amount,
+      ),
+      additionalRevenue: sum(
+        current.filter(
+          (row) => !["new", "renewal"].includes(row.registration_type ?? ""),
+        ),
+        (row) => row.paid_amount,
+      ),
+      refunds: sum(
+        refunded.filter((row) => row.registration_date?.startsWith(month)),
+        (row) => row.paid_amount,
+      ),
+    });
+    const date = new Date(`${month}-01T00:00:00Z`);
+    month = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1))
+      .toISOString()
+      .slice(0, 7);
+  }
+  return {
+    role: scope.role,
+    period,
+    today,
+    rows,
+    realtimeTopic: null,
+    metrics: {
+      periodRevenue: sum(paid, (row) => row.paid_amount),
+      totalRevenue: sum(
+        rows.registrations.filter((row) => row.status === "paid"),
+        (row) => row.paid_amount,
+      ),
+      refunds: sum(refunded, (row) => row.paid_amount),
+      newRegistrations: paid.filter((row) => row.registration_type === "new")
+        .length,
+      renewedRegistrations: paid.filter(
+        (row) => row.registration_type === "renewal",
+      ).length,
+      conversionRate: consultations.length
+        ? (100 * converted.length) / consultations.length
+        : null,
+      averagePayment: average(paid, (row) => row.paid_amount),
+      averageSessions: average(paid, (row) => row.registered_sessions),
+      completedClasses: completedClasses.length,
+      assignedMembers: activeMembers.length,
+      remainingSessions: sum(activeMembers, (row) => row.remainingSessions),
+    },
+    revenue,
+    funnel: {
+      leads: rows.leads.filter((row) => within(row.lead_date, period)).length,
+      consulted: consultations.length,
+      converted: converted.length,
+    },
+    sources: [
+      ...new Set(
+        consultations.map((row) => row.acquisition_source ?? "경로 미확인"),
+      ),
+    ].map((source) => {
+      const count = consultations.filter(
+        (row) => (row.acquisition_source ?? "경로 미확인") === source,
+      ).length;
+      const registrations = converted.filter(
+        (row) => (row.acquisition_source ?? "경로 미확인") === source,
+      ).length;
+      return {
+        source,
+        consulted: count,
+        converted: registrations,
+        conversionRate: count ? (100 * registrations) / count : null,
+      };
+    }),
+    members,
+    renewals: activeMembers
+      .filter(
+        (row) =>
+          (row.remainingSessions !== null && row.remainingSessions <= 5) ||
+          (row.expectedDepletionDate !== null &&
+            row.expectedDepletionDate <= addDays(today, 14)),
+      )
+      .sort(
+        (a, b) =>
+          (a.remainingSessions ?? Infinity) - (b.remainingSessions ?? Infinity),
+      ),
+    todayClasses: rows.classes
+      .filter(
+        (row) =>
+          row.class_date === today &&
+          ["scheduled", "completed"].includes(row.status ?? ""),
+      )
+      .sort((a, b) => (a.starts_at ?? "z").localeCompare(b.starts_at ?? "z")),
+    trainerComparison:
+      scope.role === "admin"
+        ? rows.trainers.map((trainer) => ({
+            id: trainer.id,
+            name: trainer.display_name,
+            revenue: sum(
+              paid.filter((row) => row.trainer_id === trainer.id),
+              (row) => row.paid_amount,
+            ),
+            newRegistrations: paid.filter(
+              (row) =>
+                row.trainer_id === trainer.id &&
+                row.registration_type === "new",
+            ).length,
+            renewedRegistrations: paid.filter(
+              (row) =>
+                row.trainer_id === trainer.id &&
+                row.registration_type === "renewal",
+            ).length,
+            classes: completedClasses.filter(
+              (row) => row.trainer_id === trainer.id,
+            ).length,
+            members: activeMembers.filter((row) => row.trainerId === trainer.id)
+              .length,
+          }))
+        : [],
+    connections: rows.connections,
+  };
+}

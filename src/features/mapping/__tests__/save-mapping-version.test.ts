@@ -28,7 +28,7 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ from: (ta
         state.records.push({ ...inserted, id: "concurrent" });
         return { data: null, error: { code: "23505" } };
       }
-      const row = { ...inserted, id: `mapping-${inserted.version}` };
+      const row = { ...inserted, id: `mapping-${inserted.version}`, version: inserted.version };
       state.records.push(row);
       return { data: { id: row.id, version: row.version }, error: null };
     },
