@@ -2,6 +2,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { readFile, readdir } from "node:fs/promises";
+import type { StoredRecord } from "@/features/sync/types";
 const db = new PGlite();
 const uid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const org = uid(1), admin = uid(2), connection = uid(3), tab = uid(4), trainer = uid(5), coach = uid(6), member = uid(7), duplicate = uid(8), outsider = uid(9);
@@ -162,4 +163,33 @@ it("deletes only raw history without replaying assignments after a trainer is de
   expect((await db.query("select * from raw_snapshots")).rows).toHaveLength(0);
   expect((await db.query("select record->>'raw_snapshot_id' as snapshot from sync_record_state")).rows).toEqual([{snapshot:null},{snapshot:null}]);
   expect((await db.query("select action from audit_events where action='history_delete'")).rows).toHaveLength(2);
+});
+it("replays column assignment and member resolution when normal sync refreshes an unchanged row snapshot", async () => {
+  const classTab=uid(40),memberMapping=uid(41),classMapping=uid(42);
+  await db.query("insert into sheet_tabs(id,organization_id,source_connection_id,google_sheet_id,title,domain) values($1,$2,$3,1,'Classes','class')",[classTab,org,connection]);
+  for(const [mappingId,tabId] of [[memberMapping,tab],[classMapping,classTab]]) await db.query("insert into mapping_versions(id,organization_id,source_connection_id,source_tab_id,version,mapping_fingerprint,mapping_confidence) values($1,$2,$3,$4,1,'sync-test',1)",[mappingId,org,connection,tabId]);
+  await call("admin_trainer",[{action:"assign",connectionId:connection,mode:"column"}]);
+  async function syncCycle(version:number){
+    const lease=await call<string>("sync_acquire",[connection,"manual"]);
+    const memberSnapshot=await call<string>("sync_insert_snapshot",[org,connection,tab,`members-${version}`,new Date().toISOString(),{rows:[["Keep","M1",5],["Alias","M2",version]]}]);
+    const classSnapshot=await call<string>("sync_insert_snapshot",[org,connection,classTab,`classes-${version}`,new Date().toISOString(),{rows:[["M1","2026-09-10",5],["M2","2026-09-10",version]]}]);
+    const record=(domain:"member"|"class",key:string,externalId:string,values:StoredRecord["values"]):StoredRecord=>({
+      domain,organization_id:org,trainer_id:null,source_connection_id:connection,source_tab_id:domain==="member"?tab:classTab,source_record_key:key,
+      raw_snapshot_id:domain==="member"?memberSnapshot:classSnapshot,mapping_version_id:domain==="member"?memberMapping:classMapping,mapping_confidence:1,record_status:"valid",
+      values,hints:{external_member_id:externalId,trainer_name:"Coach"},issues:[],canonicalIdentity:JSON.stringify([domain,externalId]),
+    });
+    await call("sync_commit_records",[org,connection,tab,lease,[record("member","keep","M1",{name:"Keep",external_member_id:"M1",remaining_sessions:5}),record("member","alias","M2",{name:"Alias",external_member_id:"M2",remaining_sessions:version})],[]]);
+    await call("sync_commit_records",[org,connection,classTab,lease,[record("class","first-class","M1",{class_date:"2026-09-10",status:"scheduled",remaining_sessions:5}),record("class","other-class","M2",{class_date:"2026-09-10",status:"scheduled",remaining_sessions:version})],[]]);
+    await call("sync_finish",[connection,lease,true,{},null,false]);
+    await call("sync_release",[connection,lease]);
+    return {memberSnapshot,classSnapshot};
+  }
+  const first=await syncCycle(1);
+  expect((await db.query("select trainer_id,record_status,member_id from classes where source_record_key='first-class'")).rows[0]).toEqual({trainer_id:trainer,record_status:"valid",member_id:member});
+  const second=await syncCycle(2);
+  expect(second.memberSnapshot).not.toBe(first.memberSnapshot);
+  expect(second.classSnapshot).not.toBe(first.classSnapshot);
+  expect((await db.query("select trainer_id,record_status,raw_snapshot_id from members where id=$1",[member])).rows[0]).toEqual({trainer_id:trainer,record_status:"valid",raw_snapshot_id:second.memberSnapshot});
+  expect((await db.query("select trainer_id,record_status,member_id,raw_snapshot_id from classes where source_record_key='first-class'")).rows[0]).toEqual({trainer_id:trainer,record_status:"valid",member_id:member,raw_snapshot_id:second.classSnapshot});
+  expect((await db.query("select remaining_sessions::integer as remaining from classes where source_record_key='other-class'")).rows[0]).toEqual({remaining:2});
 });

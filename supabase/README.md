@@ -28,7 +28,8 @@ insert into public.profiles (id, organization_id, role, display_name, is_active)
 values ('AUTH_USER_UUID', 'ORGANIZATION_UUID', 'admin', '관리자', true);
 ```
 
-Apply `202609100001_admin_workflows.sql` and `202609100002_preserve_business_history.sql` with all earlier migrations before using
+Apply `202609100001_admin_workflows.sql`, `202609100002_preserve_business_history.sql`,
+and `202609100003_replay_snapshot_refresh.sql` with all earlier migrations before using
 the administration screens. Administrators register a trainer's Google email and
 active state at `/settings/users`. This creates an approved invitation; it does
 not send email. The app's OAuth callback claims it only when trusted Auth tables
