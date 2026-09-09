@@ -141,3 +141,25 @@ it("refuses a stale worker snapshot after disconnect and history deletion", asyn
   await review(connection, { action: "delete_history", confirmation: "DELETE HISTORY" });
   await expect(call("sync_insert_snapshot", [org,connection,tab,"late",new Date().toISOString(),{ rows: [] }])).rejects.toThrow("connection_inactive");
 });
+it("deletes only raw history without replaying assignments after a trainer is deactivated", async () => {
+  const snapshot = await call<string>("sync_insert_snapshot", [org,connection,tab,"history",new Date().toISOString(),{rows:[]}]);
+  await db.query("update members set raw_snapshot_id=$1 where id=$2",[snapshot,member]);
+  await db.query("insert into classes(organization_id,source_connection_id,source_tab_id,source_record_key,raw_snapshot_id) values($1,$2,$3,'history-class',$4)",[org,connection,tab,snapshot]);
+  for (const [domain,key] of [["member","keep"],["class","history-class"]]) await db.query("insert into sync_record_state(organization_id,source_connection_id,source_tab_id,domain,source_record_key,record) values($1,$2,$3,$4,$5,$6)",[org,connection,tab,domain,key,JSON.stringify({raw_snapshot_id:snapshot,record_status:"valid",hints:{trainer_name:"Coach",external_member_id:"M1"}})]);
+  await call("admin_trainer",[{action:"assign",connectionId:connection,mode:"column"}]);
+  await call("admin_trainer",[{action:"activate",trainerId:trainer,active:false}]);
+  await review(connection,{action:"disconnect"});
+  for(const table of ["members","classes"]) await db.exec(`alter table ${table} disable trigger set_updated_at; update ${table} set updated_at='2000-01-01T00:00:00Z'; alter table ${table} enable trigger set_updated_at;`);
+  const business = async () => (await db.query("select * from (select to_jsonb(m)-'raw_snapshot_id' as row from members m union all select to_jsonb(c)-'raw_snapshot_id' from classes c) records order by row->>'id'")).rows;
+  const before = await business();
+  // Detect silent assignment/identity replay even if its resulting values happen
+  // to be unchanged. Historical cleanup must not execute business UPDATEs.
+  await db.exec("create function public.reject_business_replay() returns trigger language plpgsql as $$ begin raise exception 'business_replay'; end $$; create trigger reject_business_replay before update of trainer_id,member_id,record_status on classes for each row execute function public.reject_business_replay();");
+  await review(connection,{action:"delete_history",confirmation:"DELETE HISTORY"});
+  expect(await business()).toEqual(before);
+  await review(connection,{action:"delete_history",confirmation:"DELETE HISTORY"});
+  expect(await business()).toEqual(before);
+  expect((await db.query("select * from raw_snapshots")).rows).toHaveLength(0);
+  expect((await db.query("select record->>'raw_snapshot_id' as snapshot from sync_record_state")).rows).toEqual([{snapshot:null},{snapshot:null}]);
+  expect((await db.query("select action from audit_events where action='history_delete'")).rows).toHaveLength(2);
+});

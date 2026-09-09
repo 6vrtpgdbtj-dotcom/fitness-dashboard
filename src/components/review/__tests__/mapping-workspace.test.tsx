@@ -1,0 +1,37 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, expect, it, vi } from "vitest";
+import { MappingWorkspace } from "../mapping-workspace";
+import { mapColumns } from "@/features/mapping/map-columns";
+const mocks = vi.hoisted(() => ({ preview: vi.fn(), save: vi.fn() }));
+vi.mock("@/features/admin/preview-mapping", () => ({ previewMapping: mocks.preview }));
+vi.mock("@/features/mapping/save-mapping-version", () => ({ saveMappingVersion: mocks.save }));
+const input = { organizationId:"org",sourceConnectionId:"connection",sourceTabId:"tab",tabTitle:"원본",domain:"member" as const,rows:[["회원명","잔여횟수"],["Old member","1"],["회원명","등록일","실결제금액"],["New member","2026-09-10","100000"]] };
+beforeEach(() => { vi.resetAllMocks(); mocks.save.mockResolvedValue({id:"version",version:2}); });
+it("replaces stale columns and samples before saving the selected domain and header", async () => {
+  mocks.preview.mockImplementation(async ({ domain,headerRowIndex }) => mapColumns({...input,domain,headerRowIndex}));
+  render(<MappingWorkspace tabs={[{id:"tab",source_connection_id:"connection",title:"원본",domain:null,mappingResult:mapColumns({...input,headerRowIndex:0})}]} />);
+  fireEvent.change(screen.getByLabelText("데이터 분야"),{target:{value:"registration"}});
+  fireEvent.change(screen.getByLabelText("헤더 행"),{target:{value:"3"}});
+  fireEvent.click(screen.getByRole("button",{name:"선택한 행 미리보기"}));
+  await screen.findByRole("columnheader",{name:"원본 헤더"});
+  await waitFor(() => expect(screen.getByLabelText("3열 실결제금액 표준 필드")).toHaveValue("paid_amount"));
+  expect(screen.queryByText("Old member")).not.toBeInTheDocument();
+  expect(screen.getByText("New member")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button",{name:"새 매핑 버전 저장"}));
+  await waitFor(() => expect(mocks.save).toHaveBeenCalledWith({sourceConnectionId:"connection",sourceTabId:"tab",domain:"registration",headerRowIndex:2,columns:[{sourceHeader:"회원명",field:"name"},{sourceHeader:"등록일",field:"registration_date"},{sourceHeader:"실결제금액",field:"paid_amount"}]}));
+});
+it("recovers an undiscovered single-column header and blocks stale preview responses", async () => {
+  const single = {...input,rows:[["운영 기록"],["회원명"],["민수"]]};
+  let complete!: (value: ReturnType<typeof mapColumns>) => void;
+  mocks.preview.mockImplementationOnce(() => new Promise(resolve => { complete=resolve; })).mockResolvedValueOnce(mapColumns({...single,headerRowIndex:1}));
+  render(<MappingWorkspace tabs={[{id:"tab",source_connection_id:"connection",title:"원본",domain:null,mappingResult:mapColumns(single)}]} />);
+  expect(screen.queryByRole("button",{name:"새 매핑 버전 저장"})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button",{name:"선택한 행 미리보기"}));
+  fireEvent.change(screen.getByLabelText("헤더 행"),{target:{value:"2"}});
+  complete(mapColumns({...single,headerRowIndex:0}));
+  await waitFor(() => expect(screen.getByRole("button",{name:"선택한 행 미리보기"})).toBeEnabled());
+  expect(screen.queryByRole("button",{name:"새 매핑 버전 저장"})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button",{name:"선택한 행 미리보기"}));
+  await waitFor(() => expect(screen.getByLabelText("1열 회원명 표준 필드")).toHaveValue("name"));
+  expect(screen.getByRole("button",{name:"새 매핑 버전 저장"})).toBeEnabled();
+});

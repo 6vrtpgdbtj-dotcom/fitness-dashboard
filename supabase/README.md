@@ -28,7 +28,7 @@ insert into public.profiles (id, organization_id, role, display_name, is_active)
 values ('AUTH_USER_UUID', 'ORGANIZATION_UUID', 'admin', '관리자', true);
 ```
 
-Apply `202609100001_admin_workflows.sql` with all earlier migrations before using
+Apply `202609100001_admin_workflows.sql` and `202609100002_preserve_business_history.sql` with all earlier migrations before using
 the administration screens. Administrators register a trainer's Google email and
 active state at `/settings/users`. This creates an approved invitation; it does
 not send email. The app's OAuth callback claims it only when trusted Auth tables
@@ -51,6 +51,13 @@ business records, mapping versions, aliases and audit metadata remain. Stale
 workers cannot insert new raw snapshots for disconnected connections. The app
 does not write back to Google Sheets or revoke the administrator's Google OAuth
 credential; disconnected channel notifications are ignored.
+
+Changing a mapping's domain or header row invalidates the old preview. Select
+`선택한 행 미리보기` to recompute redacted columns, examples and required fields
+from the scoped source snapshot before confirming. Tabs with no discovered header
+can be recovered by selecting the actual row, including single-column schemas.
+Snapshot deletion clears only non-null provenance pointers and does not replay
+trainer/member resolution or refresh canonical business timestamps.
 
 The initial review workspace shows up to 100 latest review/rejected records per
 domain, 100 source tabs, 500 approved merge candidates, and 100 audit entries.

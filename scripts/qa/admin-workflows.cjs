@@ -16,6 +16,22 @@ async (page) => {
   }
   await page.setViewportSize({width:390,height:844});
   await page.goto("http://127.0.0.1:3018/?view=review");
+  await page.getByLabel("데이터 분야").selectOption("registration");
+  await page.getByLabel("헤더 행").fill("3");
+  if(await page.getByRole("button",{name:"새 매핑 버전 저장"}).count()) throw new Error("Stale mapping remained confirmable");
+  await page.getByRole("button",{name:"선택한 행 미리보기"}).click();
+  await page.getByLabel("3열 실결제금액 표준 필드").waitFor();
+  if(await page.getByLabel("3열 실결제금액 표준 필드").inputValue()!=="paid_amount") throw new Error("Wrong mapping after header selection");
+  if(!(await page.getByRole("button",{name:"새 매핑 버전 저장"}).isEnabled())) throw new Error("New valid mapping is not confirmable");
+  await page.screenshot({path:"output/playwright/task-8-recomputed-mapping-390.png",fullPage:true});
+  await page.goto("http://127.0.0.1:3018/?view=review&missing=1");
+  if(await page.getByRole("button",{name:"새 매핑 버전 저장"}).count()) throw new Error("Missing header was confirmable");
+  await page.getByLabel("헤더 행").fill("5");
+  await page.getByRole("button",{name:"선택한 행 미리보기"}).click();
+  await page.getByLabel("1열 회원명 표준 필드").waitFor();
+  if(!(await page.getByRole("button",{name:"새 매핑 버전 저장"}).isEnabled())) throw new Error("Missing header recovery failed");
+  await page.screenshot({path:"output/playwright/task-8-missing-header-recovered-390.png",fullPage:true});
+  await page.goto("http://127.0.0.1:3018/?view=review");
   await page.getByRole("button",{name:"검토",exact:true}).click();
   await page.getByLabel("수정값").fill("12");
   await page.getByRole("button",{name:"수정 저장"}).click();
