@@ -94,14 +94,14 @@ export function AppShell({
                 <Database size={17} aria-hidden="true" />
                 시트 연결
               </a>
-              <span className="nav-disabled" aria-disabled="true">
+              <a href="/settings/data-review" className={pathname === "/settings/data-review" ? "is-current" : undefined} aria-current={pathname === "/settings/data-review" ? "page" : undefined}>
                 <ScanLine size={17} aria-hidden="true" />
                 데이터 점검
-              </span>
-              <span className="nav-disabled" aria-disabled="true">
+              </a>
+              <a href="/settings/users" className={pathname === "/settings/users" ? "is-current" : undefined} aria-current={pathname === "/settings/users" ? "page" : undefined}>
                 <UserCog size={17} aria-hidden="true" />
                 사용자 관리
-              </span>
+              </a>
             </>
           )}
         </nav>
@@ -133,6 +133,7 @@ export function AppShell({
             <ArrowUpRight size={14} aria-hidden="true" />
           </div>
         </header>
+        {role === "admin" && <nav className="mobile-admin-nav" aria-label="모바일 운영 설정"><a href="/settings/sheets">시트</a><a href="/settings/data-review">데이터 점검</a><a href="/settings/users">사용자 관리</a></nav>}
         <main id="main-content">{children}</main>
       </section>
       <nav className="mobile-nav" aria-label="모바일 메뉴">

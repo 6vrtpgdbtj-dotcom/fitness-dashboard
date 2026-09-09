@@ -28,9 +28,34 @@ insert into public.profiles (id, organization_id, role, display_name, is_active)
 values ('AUTH_USER_UUID', 'ORGANIZATION_UUID', 'admin', '관리자', true);
 ```
 
-Subsequent trainer provisioning inserts a `trainers` row followed by an approved
-profile referencing its UUID. Email invitation and first-login matching are the
-later user-management task, not automatic approval in this migration.
+Apply `202609100001_admin_workflows.sql` with all earlier migrations before using
+the administration screens. Administrators register a trainer's Google email and
+active state at `/settings/users`. This creates an approved invitation; it does
+not send email. The app's OAuth callback claims it only when trusted Auth tables
+confirm the email and a Google identity. Existing profiles are never replaced;
+inactive invitations cannot be claimed. A pending email can belong to only one
+organization. Activation changes both the trainer and its login profile.
+
+`/settings/data-review` supports field correction, approval/rejection, source
+mapping confirmation, member merging, connection disconnection and raw snapshot
+deletion. Authenticated RPCs derive organization/actor from `auth.uid()` and commit
+changes with their audit event. Member merges archive the duplicate, retain its
+name/external ID/source provenance in `member_aliases`, and move dependent rows.
+`record_overrides` keeps administrator decisions across later syncs. Column-based
+trainer assignment uses only a unique active trainer name/email match; missing
+or ambiguous matches remain in review and grant no trainer access.
+
+Historical deletion means **raw snapshots only**. Disconnect first, then enter
+`DELETE HISTORY` in the confirmation dialog. It is irreversible. Canonical
+business records, mapping versions, aliases and audit metadata remain. Stale
+workers cannot insert new raw snapshots for disconnected connections. The app
+does not write back to Google Sheets or revoke the administrator's Google OAuth
+credential; disconnected channel notifications are ignored.
+
+The initial review workspace shows up to 100 latest review/rejected records per
+domain, 100 source tabs, 500 approved merge candidates, and 100 audit entries.
+The review and audit windows are labelled; query/search pagination is a future scaling
+step for organizations exceeding those sizes.
 
 ## Database contracts
 

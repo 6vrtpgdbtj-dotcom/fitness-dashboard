@@ -20,6 +20,6 @@ it("shows administrator-only settings for administrators", () => {
   );
 
   expect(screen.getByText("시트 연결")).toBeInTheDocument();
-  expect(screen.getByText("데이터 점검")).toBeInTheDocument();
-  expect(screen.getByText("사용자 관리")).toBeInTheDocument();
+  expect(screen.getAllByRole("link", { name: "데이터 점검" })[0]).toHaveAttribute("href", "/settings/data-review");
+  expect(screen.getAllByRole("link", { name: "사용자 관리" })[0]).toHaveAttribute("href", "/settings/users");
 });

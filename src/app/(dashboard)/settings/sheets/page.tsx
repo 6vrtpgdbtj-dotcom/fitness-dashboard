@@ -4,6 +4,8 @@ import { AddSheetDialog } from "@/components/sheets/add-sheet-dialog";
 import { requireUser } from "@/lib/auth/require-user";
 import { listSheetConnections } from "@/lib/google/sheets";
 import { createClient } from "@/lib/supabase/server";
+import { ConnectionControls } from "@/components/review/connection-controls";
+import "@/components/review/admin.css";
 
 export default async function SheetsSettingsPage() {
   const user = await requireUser();
@@ -48,8 +50,9 @@ export default async function SheetsSettingsPage() {
                   <span>최근 성공: {connection.last_successful_sync_at ? new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(connection.last_successful_sync_at)) : "아직 없음"}</span>
                   <div className="connection-controls" aria-label={`${connection.display_name} 관리`}>
                     <button className="quiet-button" type="button" disabled>지금 동기화</button>
-                    <button className="quiet-button" type="button" disabled>담당 변경</button>
-                    <button className="danger-button" type="button" disabled>연결 해제</button>
+                    <a className="quiet-button" href="/settings/users">담당 변경</a>
+                    <a className="quiet-button" href="/settings/data-review">데이터 점검</a>
+                    <ConnectionControls connection={connection} />
                   </div>
                 </div>
               </article>

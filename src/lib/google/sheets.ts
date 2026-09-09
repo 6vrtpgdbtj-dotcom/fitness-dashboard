@@ -98,6 +98,7 @@ export type SheetConnectionSummary = {
   id: string;
   display_name: string;
   status: string;
+  is_active: boolean;
   last_successful_sync_at: string | null;
   sheet_tabs: Array<{ title: string }>;
   trainer: { display_name: string } | null;
@@ -110,7 +111,7 @@ type RawSheetConnectionSummary = Omit<SheetConnectionSummary, "trainer"> & {
 export async function listSheetConnections() {
   const client = await createClient();
   const { data, error } = await client.from("sheet_connections")
-    .select("id, display_name, status, last_successful_sync_at, sheet_tabs(title), trainer:trainers(display_name)")
+    .select("id, display_name, status, is_active, last_successful_sync_at, sheet_tabs(title), trainer:trainers(display_name)")
     .order("created_at", { ascending: false });
   if (error) throw new Error("Could not load Google Sheet connections.");
   return ((data ?? []) as unknown as RawSheetConnectionSummary[]).map((connection) => ({

@@ -17,7 +17,11 @@ export async function GET(request: NextRequest) {
   const { error } = await client.auth.exchangeCodeForSession(code);
   if (error) return redirectTo("/login?error=oauth");
 
-  const result = await readUserScope(client);
+  let result = await readUserScope(client);
+  if (!result.user && result.error === "not-approved") {
+    const claimed = await client.rpc("claim_trainer_invitation");
+    if (!claimed.error && claimed.data === true) result = await readUserScope(client);
+  }
   if (!result.user) {
     await client.auth.signOut();
     return redirectTo("/login?error=not-approved");

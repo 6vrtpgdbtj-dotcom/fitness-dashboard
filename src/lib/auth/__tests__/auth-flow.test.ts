@@ -6,12 +6,13 @@ import { signInWithGoogle } from "@/app/login/actions";
 import { middleware } from "@/middleware";
 
 const mocks = vi.hoisted(() => ({
-  getUser: vi.fn(), maybeSingle: vi.fn(), exchangeCodeForSession: vi.fn(), signInWithOAuth: vi.fn(), signOut: vi.fn(), refreshCookies: false,
+  getUser: vi.fn(), maybeSingle: vi.fn(), exchangeCodeForSession: vi.fn(), signInWithOAuth: vi.fn(), signOut: vi.fn(), rpc: vi.fn(), refreshCookies: false,
 }));
 vi.mock("server-only", () => ({}));
 function fakeClient() {
   return {
     auth: mocks,
+    rpc: mocks.rpc,
     from: (table: string) => {
       if (table !== "profiles") throw new Error("Unexpected table");
       return { select: () => ({ eq: (column: string, value: string) => {
@@ -38,6 +39,7 @@ beforeEach(() => {
   mocks.maybeSingle.mockResolvedValue({ data: { id: "u1", organization_id: "o1", role: "admin", trainer_id: null, is_active: true }, error: null });
   mocks.exchangeCodeForSession.mockResolvedValue({ data: {}, error: null });
   mocks.signOut.mockResolvedValue({ error: null });
+  mocks.rpc.mockResolvedValue({ data: false, error: null });
   mocks.signInWithOAuth.mockImplementation((options) => {
     if (options.provider !== "google" || options.options.redirectTo !== "https://fitness.example/auth/callback") throw new Error("Wrong OAuth configuration");
     return { data: { url: "https://test.supabase.co/auth/v1/authorize?provider=google" }, error: null };
@@ -74,6 +76,12 @@ describe("Google login", () => {
     mocks.maybeSingle.mockResolvedValue({ data: null, error: null });
     expect((await GET(new NextRequest("https://fitness.example/auth/callback?code=valid"))).headers.get("location"))
       .toBe("https://fitness.example/login?error=not-approved");
+  });
+  it("activates an approved invitation before rejecting first Google login", async () => {
+    mocks.maybeSingle.mockResolvedValueOnce({ data: null, error: null }).mockResolvedValue({ data: { id: "u1", organization_id: "o1", role: "trainer", trainer_id: "t1", is_active: true }, error: null });
+    mocks.rpc.mockResolvedValue({ data: true, error: null });
+    expect((await GET(new NextRequest("https://fitness.example/auth/callback?code=valid"))).headers.get("location")).toBe("https://fitness.example/dashboard");
+    expect(mocks.rpc).toHaveBeenCalledWith("claim_trainer_invitation");
   });
 });
 
