@@ -5,8 +5,8 @@ const mocks = vi.hoisted(() => ({ role: "admin", rpc: vi.fn() }));
 vi.mock("@/lib/auth/require-user", () => ({ requireUser: async () => ({ id: "admin", role: mocks.role }) }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ rpc: mocks.rpc }) }));
 const id = "00000000-0000-4000-8000-000000000010";
-const post = (body: unknown) => POST(new Request("http://localhost/api/review/" + id, { method: "POST", body: JSON.stringify(body) }), { params: Promise.resolve({ id }) });
-beforeEach(() => { mocks.role = "admin"; mocks.rpc.mockReset().mockResolvedValue({ data: { id }, error: null }); });
+const post = (body: unknown) => POST(new Request("http://localhost/api/review/" + id, { method: "POST", headers: { origin: "http://localhost" }, body: JSON.stringify(body) }), { params: Promise.resolve({ id }) });
+beforeEach(() => { vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost"); mocks.role = "admin"; mocks.rpc.mockReset().mockResolvedValue({ data: { id }, error: null }); });
 it("denies trainers before a review mutation", async () => { mocks.role = "trainer"; expect((await post({ action: "reject", domain: "member" })).status).toBe(403); expect(mocks.rpc).not.toHaveBeenCalled(); });
 it("passes only validated target and fields to the scoped transaction", async () => {
   expect((await post({ action: "correct", domain: "member", fields: { phone_last4: "1234" } })).status).toBe(200);

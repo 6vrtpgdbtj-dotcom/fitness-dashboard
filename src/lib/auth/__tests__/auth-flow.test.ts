@@ -107,6 +107,7 @@ describe("dashboard middleware", () => {
     const response = await middleware(new NextRequest("https://fitness.example/dashboard"));
     expect(response.headers.get("location")).toBeNull();
     expect(response.cookies.get("sb-test")?.value).toBe("refreshed");
+    expect(response.cookies.get("sb-test")?.secure).toBe(true);
     expect(response.headers.get("cache-control")).toContain("no-store");
   });
   it("preserves refreshed cookies when redirecting an unapproved user", async () => {

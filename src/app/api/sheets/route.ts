@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { rejectCrossOrigin } from "@/lib/auth/csrf";
 import { requireUser } from "@/lib/auth/require-user";
 import { createSheetConnection, getOrganizationId, readSpreadsheetMetadata } from "@/lib/google/sheets";
 
@@ -18,6 +19,8 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const rejected = rejectCrossOrigin(request);
+  if (rejected) return rejected;
   const user = await requireUser();
   if (user.role !== "admin") return NextResponse.json({ error: "Administrator access is required." }, { status: 403 });
 

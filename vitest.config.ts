@@ -8,6 +8,9 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    // Each database suite boots PostgreSQL/WASM; bound concurrency on CI laptops.
+    maxWorkers: 2,
+    include: ["src/**/*.test.{ts,tsx}", "tests/**/*.test.ts"],
     setupFiles: ["./src/test/setup.ts"]
   },
   resolve: {

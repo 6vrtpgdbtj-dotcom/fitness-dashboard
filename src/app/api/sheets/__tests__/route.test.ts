@@ -18,6 +18,7 @@ vi.mock("@/lib/google/sheets", () => ({
 }));
 
 beforeEach(() => {
+  vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://fitness.example");
   vi.clearAllMocks();
   mocks.requireUser.mockResolvedValue({ id: "admin-1", role: "admin", trainerId: null });
   mocks.getOrganizationId.mockResolvedValue("organization-1");
@@ -32,7 +33,7 @@ beforeEach(() => {
 function request(body: unknown) {
   return new NextRequest("https://fitness.example/api/sheets", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", origin: "https://fitness.example" },
     body: JSON.stringify(body),
   });
 }

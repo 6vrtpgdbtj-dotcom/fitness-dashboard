@@ -1267,12 +1267,12 @@ main {
   .dashboard-filters input {
     min-width: 0;
     width: 100%;
-    min-height: 43px;
+    min-height: 44px;
     font-size: 0.7rem;
     padding: 7px 5px;
   }
   .dashboard-filters .quiet-button {
-    min-height: 43px;
+    min-height: 44px;
     padding: 9px;
     font-size: 0.65rem;
   }
@@ -1375,7 +1375,7 @@ main {
   }
   .mobile-sync .sync-link {
     grid-column: 1 / -1;
-    min-height: 42px;
+    min-height: 44px;
   }
   .mobile-sync .sync-issues {
     grid-column: 1 / -1;
@@ -1434,6 +1434,11 @@ main {
   }
   .renewal-panel .text-button {
     font-size: 0.6rem;
+  }
+  .text-button {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
   }
   .renewal-panel .panel-note {
     font-size: 0.61rem;
@@ -1590,13 +1595,18 @@ main {
   }
   .sample-banner a {
     margin-left: 0;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    min-width: 44px;
   }
   .sample-controls {
     gap: 9px;
     padding-bottom: 19px;
   }
   .sample-controls a {
-    min-height: 35px;
+    min-height: 44px;
+    min-width: 44px;
     padding: 7px 9px;
     font-size: 0.6rem;
   }

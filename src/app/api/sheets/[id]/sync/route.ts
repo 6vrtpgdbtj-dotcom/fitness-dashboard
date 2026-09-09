@@ -1,10 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
+import { rejectCrossOrigin } from "@/lib/auth/csrf";
 import { readUserScope } from "@/lib/auth/user-scope";
 import { manualSyncResponse } from "@/features/sync/http-handlers";
 import { getSyncService } from "@/features/sync/production-runtime";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const rejected = rejectCrossOrigin(_request);
+  if (rejected) return rejected;
   const client = await createClient();
   const scope = await readUserScope(client);
   if (!scope.user) return new Response(null, { status: scope.error === "unauthenticated" ? 401 : 403 });
