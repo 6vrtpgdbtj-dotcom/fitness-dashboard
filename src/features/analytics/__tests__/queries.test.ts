@@ -36,6 +36,8 @@ const rows: AnalyticsRows = {
       status: "active",
       remaining_sessions: 4,
       expected_end_date: null,
+      latest_registration_date: null,
+      updated_at: "2026-09-01T00:00:00Z",
     },
     {
       ...base,
@@ -45,6 +47,8 @@ const rows: AnalyticsRows = {
       status: "active",
       remaining_sessions: 20,
       expected_end_date: null,
+      latest_registration_date: null,
+      updated_at: "2026-09-01T00:00:00Z",
     },
     {
       ...base,
@@ -53,6 +57,8 @@ const rows: AnalyticsRows = {
       status: "active",
       remaining_sessions: 1,
       expected_end_date: null,
+      latest_registration_date: null,
+      updated_at: "2026-09-01T00:00:00Z",
       record_status: "review_required",
     },
   ],
@@ -288,9 +294,226 @@ describe("scoped operational analytics", () => {
       ),
     ).toThrow();
   });
+  it("keeps today's renewed current balance instead of yesterday's depleted class balance", () => {
+    const input = {
+      ...rows,
+      members: [
+        {
+          ...rows.members[0],
+          remaining_sessions: 11,
+          updated_at: "2026-09-08T03:00:00Z",
+        },
+      ],
+      registrations: [
+        {
+          ...registration,
+          id: "renewed-today",
+          registration_type: "renewal",
+          registration_date: "2026-09-08",
+        },
+      ],
+      classes: [
+        {
+          ...rows.classes[0],
+          class_date: "2026-09-07",
+          starts_at: "2026-09-07T01:00:00Z",
+          deducted_sessions: 1,
+          remaining_sessions: 1,
+        },
+      ],
+    };
+    const data = buildDashboardData(
+      input,
+      { id: "a", role: "admin", trainerId: null },
+      period,
+      "2026-09-08",
+    );
+    expect(data.members[0].remainingSessions).toBe(11);
+    expect(data.renewals).toEqual([]);
+    expect(data.members[0].lastClassDate).toBe("2026-09-07");
+  });
+  it.each([
+    {
+      name: "member's latest registration",
+      current: 11,
+      latest: "2026-09-08",
+      ledger: [],
+      want: 11,
+    },
+    {
+      name: "paid registration ledger with a missing current balance",
+      current: null,
+      latest: null,
+      ledger: [
+        { ...registration, id: "today", registration_date: "2026-09-08" },
+      ],
+      want: null,
+    },
+    {
+      name: "same-day registration without an event time",
+      current: 11,
+      latest: "2026-09-07",
+      ledger: [],
+      want: 11,
+    },
+  ])(
+    "rejects a pre-registration class snapshot using $name",
+    ({ current, latest, ledger, want }) => {
+      const data = buildDashboardData(
+        {
+          ...rows,
+          members: [
+            {
+              ...rows.members[0],
+              remaining_sessions: current,
+              latest_registration_date: latest,
+            },
+          ],
+          registrations: ledger,
+          classes: [
+            {
+              ...rows.classes[0],
+              class_date: "2026-09-07",
+              starts_at: null,
+              remaining_sessions: 1,
+            },
+          ],
+        },
+        { id: "a", role: "admin", trainerId: null },
+        period,
+        "2026-09-08",
+      );
+      expect(data.members[0].remainingSessions).toBe(want);
+      expect(data.renewals).toEqual([]);
+    },
+  );
+  it.each([
+    {
+      updated: "2026-09-08T02:00:00Z",
+      starts: "2026-09-08T01:00:00Z",
+      want: 11,
+    },
+    {
+      updated: "2026-09-08T00:00:00Z",
+      starts: "2026-09-08T01:00:00Z",
+      want: 1,
+    },
+    { updated: "2026-09-07T16:00:00Z", starts: null, want: 11 },
+    { updated: null, starts: null, want: 11 },
+  ])(
+    "compares the current snapshot to the class event, with conservative date-only ties ($updated / $starts)",
+    ({ updated, starts, want }) => {
+      const data = buildDashboardData(
+        {
+          ...rows,
+          members: [
+            { ...rows.members[0], remaining_sessions: 11, updated_at: updated },
+          ],
+          registrations: [],
+          classes: [
+            {
+              ...rows.classes[0],
+              class_date: "2026-09-08",
+              starts_at: starts,
+              remaining_sessions: 1,
+            },
+          ],
+        },
+        { id: "a", role: "admin", trainerId: null },
+        period,
+        "2026-09-08",
+      );
+      expect(data.members[0].remainingSessions).toBe(want);
+    },
+  );
+  it.each([
+    {
+      balances: [null, null],
+      want: {
+        total: null,
+        knownSubtotal: 0,
+        knownMembers: 0,
+        unknownMembers: 2,
+      },
+    },
+    {
+      balances: [11, null],
+      want: {
+        total: null,
+        knownSubtotal: 11,
+        knownMembers: 1,
+        unknownMembers: 1,
+      },
+    },
+    {
+      balances: [0, 0],
+      want: { total: 0, knownSubtotal: 0, knownMembers: 2, unknownMembers: 0 },
+    },
+    {
+      balances: [],
+      want: { total: 0, knownSubtotal: 0, knownMembers: 0, unknownMembers: 0 },
+    },
+  ])(
+    "distinguishes a complete remaining total from a known subtotal ($balances)",
+    ({ balances, want }) => {
+      const data = buildDashboardData(
+        {
+          ...rows,
+          members: balances.map((remaining_sessions, index) => ({
+            ...rows.members[0],
+            id: `balance-${index}`,
+            remaining_sessions,
+          })),
+          registrations: [],
+          classes: [],
+        },
+        { id: "a", role: "admin", trainerId: null },
+        period,
+        "2026-09-08",
+      );
+      expect(data.metrics.remainingSessions).toEqual(want);
+    },
+  );
   it("rejects impossible dates and reversed periods before querying", () => {
     expect(parsePeriod("2026-02-30", "2026-03-01")).toBeNull();
     expect(parsePeriod("2026-09-30", "2026-09-01")).toBeNull();
     expect(parsePeriod("2026-09-01", "2026-09-30")).toEqual(period);
+  });
+  it("keeps a pre-renewal member snapshot unknown while its sheet catches up to the paid ledger", () => {
+    const data = buildDashboardData(
+      {
+        ...rows,
+        members: [
+          {
+            ...rows.members[0],
+            remaining_sessions: 1,
+            expected_end_date: "2026-09-09",
+            updated_at: "2026-09-07T01:00:00Z",
+          },
+        ],
+        registrations: [
+          {
+            ...registration,
+            id: "new-renewal",
+            registration_date: "2026-09-08",
+            registration_type: "renewal",
+          },
+        ],
+        classes: [
+          {
+            ...rows.classes[0],
+            class_date: "2026-09-07",
+            starts_at: "2026-09-07T00:00:00Z",
+            remaining_sessions: 1,
+          },
+        ],
+      },
+      { id: "a", role: "admin", trainerId: null },
+      period,
+      "2026-09-08",
+    );
+    expect(data.members[0].remainingSessions).toBeNull();
+    expect(data.members[0].expectedDepletionDate).toBeNull();
+    expect(data.renewals).toEqual([]);
   });
 });

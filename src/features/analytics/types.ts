@@ -9,6 +9,8 @@ export type MemberRow = RecordScope & {
   status: string | null;
   remaining_sessions: number | null;
   expected_end_date: string | null;
+  latest_registration_date: string | null;
+  updated_at: string | null;
 };
 export type RegistrationRow = RecordScope & {
   member_id: string | null;
@@ -90,7 +92,12 @@ export type DashboardData = {
     averageSessions: number | null;
     completedClasses: number;
     assignedMembers: number;
-    remainingSessions: number;
+    remainingSessions: {
+      total: number | null;
+      knownSubtotal: number;
+      knownMembers: number;
+      unknownMembers: number;
+    };
   };
   revenue: RevenuePoint[];
   funnel: { leads: number; consulted: number; converted: number };

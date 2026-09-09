@@ -171,8 +171,10 @@ export function DetailView({
         </div>
       ) : (
         <div className="empty-inline">
-          표시할 {detailTitles[kind]} 기록이 없습니다. 시트 동기화와 조회 기간을
-          확인하세요.
+          표시할 {detailTitles[kind]} 기록이 없습니다.{" "}
+          {kind === "members"
+            ? "시트 동기화와 담당 범위를 확인하세요."
+            : "시트 동기화와 조회 기간을 확인하세요."}
         </div>
       )}
     </section>

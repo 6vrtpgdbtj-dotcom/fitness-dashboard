@@ -50,6 +50,36 @@ describe("accessible operational components", () => {
       screen.getByText(/상담일이 있는 유효한 완료 상담/),
     ).toBeInTheDocument();
   });
+  it("keeps cross-year month targets uniquely named inside a keyboard-accessible scroll region", () => {
+    render(
+      <RevenueChart
+        data={[
+          {
+            month: "2025-09",
+            newRevenue: 0,
+            renewedRevenue: 0,
+            additionalRevenue: 0,
+            refunds: 0,
+          },
+          {
+            month: "2026-09",
+            newRevenue: 100000,
+            renewedRevenue: 200000,
+            additionalRevenue: 0,
+            refunds: 0,
+          },
+        ]}
+      />,
+    );
+    const chart = screen.getByRole("region", {
+      name: /월별 매출.*좌우 스크롤/,
+    });
+    expect(chart).toHaveAttribute("tabindex", "0");
+    fireEvent.focus(within(chart).getByRole("button", { name: /^2025년 9월/ }));
+    expect(screen.getByRole("status")).toHaveTextContent("2025.09");
+    fireEvent.focus(within(chart).getByRole("button", { name: /^2026년 9월/ }));
+    expect(screen.getByRole("status")).toHaveTextContent("2026.09");
+  });
   it("shows renewal empty state without fabricated members", () => {
     render(<RenewalTable members={[]} role="trainer" />);
     expect(

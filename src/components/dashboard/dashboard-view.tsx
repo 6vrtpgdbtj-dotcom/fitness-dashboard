@@ -67,6 +67,13 @@ export function DashboardView({
       initial.rows.classes.length >
     0;
   const metrics = data.metrics;
+  const remaining = metrics.remainingSessions;
+  const remainingDetail =
+    remaining.total !== null
+      ? `잔여 세션 합계 ${number(remaining.total)}회`
+      : remaining.knownMembers
+        ? `확인된 잔여 ${number(remaining.knownSubtotal)}회 · ${number(remaining.unknownMembers)}명 미확인`
+        : `잔여 세션 미확인 · ${number(remaining.unknownMembers)}명 기록 필요`;
   return (
     <>
       <div className="dashboard-toolbar">
@@ -187,7 +194,7 @@ export function DashboardView({
             detail={
               scope.role === "admin"
                 ? `완료 상담 ${data.funnel.consulted}건 중 ${data.funnel.converted}건 등록`
-                : `잔여 세션 합계 ${number(metrics.remainingSessions)}회`
+                : remainingDetail
             }
             index={2}
           />

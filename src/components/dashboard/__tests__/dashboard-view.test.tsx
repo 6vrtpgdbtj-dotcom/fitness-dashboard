@@ -99,3 +99,43 @@ it("renders trainer priorities with no administrative filters or connection acti
     screen.getByRole("heading", { name: /오늘의 수업/ }),
   ).toBeInTheDocument();
 });
+it.each([
+  { balances: [null, null], visible: "잔여 세션 미확인 · 2명 기록 필요" },
+  { balances: [11, null], visible: "확인된 잔여 11회 · 1명 미확인" },
+  { balances: [0, 0], visible: "잔여 세션 합계 0회" },
+])(
+  "labels remaining-session completeness accurately ($balances)",
+  ({ balances, visible }) => {
+    const trainer = { id: "user-a", role: "trainer" as const, trainerId: "a" };
+    const input = {
+      ...rows,
+      members: balances.map((remaining_sessions, index) => ({
+        id: `member-${index}`,
+        trainer_id: "a",
+        record_status: "valid",
+        name: `회원 ${index}`,
+        status: "active",
+        remaining_sessions,
+        expected_end_date: null,
+        latest_registration_date: null,
+        updated_at: null,
+      })),
+    };
+    render(
+      <DashboardView
+        data={buildDashboardData(
+          input,
+          trainer,
+          { start: "2026-09-01", end: "2026-09-30" },
+          "2026-09-08",
+        )}
+        scope={trainer}
+      />,
+    );
+    expect(
+      within(screen.getByRole("group", { name: "담당 회원" })).getByText(
+        visible,
+      ),
+    ).toBeInTheDocument();
+  },
+);

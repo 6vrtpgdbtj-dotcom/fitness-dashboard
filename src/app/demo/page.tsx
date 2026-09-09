@@ -16,10 +16,21 @@ import { sampleRows } from "@/features/analytics/sample-data";
 export default async function DemoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ role?: string; state?: string; view?: string }>;
+  searchParams: Promise<{
+    role?: string;
+    state?: string;
+    view?: string;
+    balance?: string;
+  }>;
 }) {
   const params = await searchParams;
   const role = params.role === "trainer" ? "trainer" : "admin";
+  const balance =
+    params.balance === "unknown" ||
+    params.balance === "partial" ||
+    params.balance === "renewed"
+      ? params.balance
+      : undefined;
   const state = ["empty", "partial", "loading", "error"].includes(
     params.state ?? "",
   )
@@ -45,7 +56,7 @@ export default async function DemoPage({
           trainers: [],
           connections: [],
         }
-      : sampleRows();
+      : sampleRows(balance);
   if (state === "partial")
     rows.connections[1] = { ...rows.connections[1], status: "failed" };
   const data = buildDashboardData(
@@ -79,6 +90,18 @@ export default async function DemoPage({
         </span>
         <a href="/login">실제 운영 로그인 ↗</a>
       </div>
+      {balance && (
+        <p className="sample-banner">
+          <strong>잔여 세션 검증 예시</strong>
+          <span>
+            {balance === "unknown"
+              ? "모든 회원의 현재 잔여 세션이 미확인인 가상 사례입니다."
+              : balance === "partial"
+                ? "한 회원의 11회만 확인되고 나머지는 미확인인 가상 사례입니다."
+                : "샘플 회원 01: 어제 수업 후 1회, 오늘 10회 재등록 후 현재 11회인 가상 사례입니다."}
+          </span>
+        </p>
+      )}
       <div className="sample-controls" aria-label="샘플 상태 선택">
         <div>
           {[

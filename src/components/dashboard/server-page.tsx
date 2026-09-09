@@ -19,8 +19,12 @@ export async function ServerDashboardPage({
   const scope = await requireUser();
   const params = await searchParams;
   // Only date controls are read from the URL. The user scope always comes from requireUser.
-  const requestedPeriod = parsePeriod(params.start, params.end);
+  const usesPeriod = kind !== "members";
+  const requestedPeriod = usesPeriod
+    ? parsePeriod(params.start, params.end)
+    : null;
   const invalidPeriod =
+    usesPeriod &&
     (params.start !== undefined || params.end !== undefined) &&
     !requestedPeriod;
   const period = requestedPeriod ?? currentMonth();
@@ -67,29 +71,31 @@ export async function ServerDashboardPage({
       )}
       {kind ? (
         <>
-          <form className="detail-period">
-            <label>
-              시작일
-              <input
-                name="start"
-                type="date"
-                defaultValue={period.start}
-                required
-              />
-            </label>
-            <label>
-              종료일
-              <input
-                name="end"
-                type="date"
-                defaultValue={period.end}
-                required
-              />
-            </label>
-            <button className="quiet-button" type="submit">
-              기간 적용
-            </button>
-          </form>
+          {usesPeriod && (
+            <form className="detail-period">
+              <label>
+                시작일
+                <input
+                  name="start"
+                  type="date"
+                  defaultValue={period.start}
+                  required
+                />
+              </label>
+              <label>
+                종료일
+                <input
+                  name="end"
+                  type="date"
+                  defaultValue={period.end}
+                  required
+                />
+              </label>
+              <button className="quiet-button" type="submit">
+                기간 적용
+              </button>
+            </form>
+          )}
           <DetailView kind={kind} data={data} />
         </>
       ) : (

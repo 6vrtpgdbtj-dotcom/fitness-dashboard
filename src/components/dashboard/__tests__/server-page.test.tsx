@@ -58,3 +58,37 @@ it("takes scope only from requireUser and visibly rejects an invalid URL date ra
     screen.queryByRole("link", { name: "시트 연결" }),
   ).not.toBeInTheDocument();
 });
+it("does not offer or validate a date filter for the current members inventory", async () => {
+  render(
+    await ServerDashboardPage({
+      searchParams: Promise.resolve({ start: "not-a-date", end: "2026-09-01" }),
+      kind: "members",
+    }),
+  );
+  expect(screen.queryByLabelText("시작일")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("종료일")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "기간 적용" }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByText(/조회 기간/)).not.toBeInTheDocument();
+});
+it.each(["registrations", "leads", "classes"] as const)(
+  "retains the date filter for dated %s records",
+  async (kind) => {
+    render(
+      await ServerDashboardPage({
+        searchParams: Promise.resolve({
+          start: "2026-09-01",
+          end: "2026-09-30",
+        }),
+        kind,
+      }),
+    );
+    expect(screen.getByLabelText("시작일")).toHaveValue("2026-09-01");
+    expect(screen.getByLabelText("종료일")).toHaveValue("2026-09-30");
+    expect(
+      screen.getByRole("button", { name: "기간 적용" }),
+    ).toBeInTheDocument();
+  },
+);

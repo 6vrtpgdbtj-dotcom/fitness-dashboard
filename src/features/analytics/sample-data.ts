@@ -1,7 +1,9 @@
 import type { AnalyticsRows } from "./types";
 
 /** Explicit fictional UI fixture. Never imported by authenticated production queries. */
-export function sampleRows(): AnalyticsRows {
+export function sampleRows(
+  balance?: "unknown" | "partial" | "renewed",
+): AnalyticsRows {
   const trainers = [
     { id: "sample-a", display_name: "샘플 트레이너 A" },
     { id: "sample-b", display_name: "샘플 트레이너 B" },
@@ -15,6 +17,8 @@ export function sampleRows(): AnalyticsRows {
     status: "active",
     remaining_sessions: [3, 5, 2, 18, 12, 8, 21, 7, 14][index],
     expected_end_date: index < 3 ? `2026-09-${12 + index * 3}` : null,
+    latest_registration_date: "2026-09-05",
+    updated_at: "2026-09-08T02:00:00Z",
   }));
   const registrations = [4, 5, 6, 7, 8, 9].flatMap((month, monthIndex) =>
     trainers.flatMap((trainer, index) =>
@@ -75,7 +79,7 @@ export function sampleRows(): AnalyticsRows {
         ]
       : []),
   ]);
-  return {
+  const result: AnalyticsRows = {
     members,
     registrations,
     leads,
@@ -88,4 +92,51 @@ export function sampleRows(): AnalyticsRows {
       last_successful_sync_at: `2026-09-08T02:1${index}:00Z`,
     })),
   };
+  if (balance === "unknown" || balance === "partial")
+    return {
+      ...result,
+      members: result.members.map((row, index) => ({
+        ...row,
+        remaining_sessions: balance === "partial" && index === 0 ? 11 : null,
+        expected_end_date: null,
+      })),
+      classes: result.classes.map((row) => ({
+        ...row,
+        remaining_sessions: null,
+      })),
+    };
+  if (balance === "renewed")
+    return {
+      ...result,
+      members: result.members.map((row, index) =>
+        index === 0
+          ? {
+              ...row,
+              remaining_sessions: 11,
+              expected_end_date: null,
+              latest_registration_date: "2026-09-08",
+              updated_at: "2026-09-08T02:00:00Z",
+            }
+          : row,
+      ),
+      classes: result.classes
+        .filter((row) => row.id !== "sample-today-0")
+        .map((row) =>
+          row.member_id === "sample-member-0"
+            ? { ...row, remaining_sessions: 1 }
+            : row,
+        ),
+      registrations: [
+        ...result.registrations,
+        {
+          ...result.registrations[0],
+          id: "sample-renewal-today",
+          registration_date: "2026-09-08",
+          registration_type: "renewal",
+          registered_sessions: 10,
+          paid_amount: 500000,
+        },
+      ],
+    };
+  return result;
 }

@@ -454,11 +454,21 @@ main {
   font-size: 0.61rem;
   margin-bottom: 5px;
 }
+.revenue-chart-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  padding: 5px 0 30px;
+  scrollbar-color: #667551 #232a1b;
+  scrollbar-width: thin;
+}
+.chart-scroll-hint {
+  display: none;
+}
 .revenue-bars {
   position: relative;
   display: flex;
   justify-content: space-around;
-  gap: clamp(6px, 2vw, 22px);
+  gap: 8px;
   height: 176px;
   padding: 0 4px;
   background: repeating-linear-gradient(
@@ -477,7 +487,7 @@ main {
   flex-direction: column;
   justify-content: flex-end;
   align-items: center;
-  min-width: 0;
+  min-width: 44px;
   max-width: 100px;
   padding: 0 5px;
   border: 0;
@@ -526,7 +536,7 @@ main {
   align-items: center;
   gap: 6px 14px;
   min-height: 40px;
-  margin-top: 36px;
+  margin-top: 8px;
   padding: 10px 12px;
   border-left: 2px solid var(--accent);
   background: #272f1f;
@@ -560,8 +570,9 @@ main {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  min-height: 30px;
-  padding: 2px 0;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 2px 6px;
   border: 0;
   background: transparent;
   color: #c3cdb7;
@@ -1486,8 +1497,8 @@ main {
   }
   .revenue-bars {
     height: 160px;
-    gap: 6px;
-    padding: 0;
+    gap: 8px;
+    padding: 0 4px;
   }
   .bar-group {
     padding: 0 2px;
@@ -1496,8 +1507,11 @@ main {
   .bar-pair {
     gap: 3px;
   }
-  .revenue-bars.dense-bars .bar-group:nth-child(even) .month-label {
-    visibility: hidden;
+  .chart-scroll-hint {
+    display: block;
+    margin: 5px 0 8px;
+    color: #a4b097;
+    font-size: 0.6rem;
   }
   .chart-readout {
     gap: 6px 9px;
@@ -1516,7 +1530,6 @@ main {
     font-size: 0.57rem;
   }
   .chart-footer .text-button {
-    min-height: 35px;
     font-size: 0.63rem;
   }
   .funnel-panel {

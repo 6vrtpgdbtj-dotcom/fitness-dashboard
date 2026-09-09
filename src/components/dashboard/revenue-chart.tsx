@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowUpRight, Table2 } from "lucide-react";
 import type { RevenuePoint } from "@/features/analytics/types";
@@ -10,6 +10,21 @@ export function RevenueChart({ data }: { data: RevenuePoint[] }) {
   const [table, setTable] = useState(false);
   const reduced = useReducedMotion();
   const active = data.find((row) => row.month === selected) ?? data.at(-1);
+  const plot = useRef<HTMLDivElement>(null);
+  const activeTarget = useRef<HTMLButtonElement>(null);
+  const crossesYear =
+    data[0]?.month.slice(0, 4) !== data.at(-1)?.month.slice(0, 4);
+  useEffect(() => {
+    const viewport = plot.current;
+    const target = activeTarget.current;
+    if (!viewport || !target) return;
+    const left = target.offsetLeft;
+    const right = left + target.offsetWidth;
+    // Keep selection visible without scrolling the page or animating motion.
+    if (left < viewport.scrollLeft) viewport.scrollLeft = left;
+    else if (right > viewport.scrollLeft + viewport.clientWidth)
+      viewport.scrollLeft = right - viewport.clientWidth;
+  }, [active?.month, data.length]);
   const maximum = Math.max(
     1,
     ...data.flatMap((row) => [row.newRevenue, row.renewedRevenue]),
@@ -49,45 +64,66 @@ export function RevenueChart({ data }: { data: RevenuePoint[] }) {
         <span>{won(maximum)}</span>
       </div>
       <div
-        className={`revenue-bars${data.length > 8 ? " dense-bars" : ""}`}
-        aria-label="신규 및 재등록 매출 비교"
+        className="revenue-chart-scroll"
+        ref={plot}
+        role="region"
+        tabIndex={0}
+        aria-label="월별 매출 비교, 작은 화면에서 좌우 스크롤"
       >
-        {data.map((point, index) => (
-          <button
-            type="button"
-            className={`bar-group${active?.month === point.month ? " selected" : ""}`}
-            key={point.month}
-            aria-pressed={active?.month === point.month}
-            aria-label={`${Number(point.month.slice(5))}월 신규 ${won(point.newRevenue)}, 재등록 ${won(point.renewedRevenue)}`}
-            onClick={() => setSelected(point.month)}
-            onFocus={() => setSelected(point.month)}
-          >
-            <span className="bar-pair" aria-hidden="true">
-              {[point.newRevenue, point.renewedRevenue].map((value, series) => (
-                <motion.span
-                  key={series}
-                  className={`revenue-bar${series ? " renewed" : ""}`}
-                  initial={{ scaleY: 0 }}
-                  animate={{ scaleY: 1, height: `${(value / maximum) * 100}%` }}
-                  transition={{
-                    delay: reduced ? 0 : 0.22 + index * 0.025,
-                    duration: reduced ? 0 : 0.32,
-                    ease: "easeOut",
-                  }}
-                  style={{
-                    originY: 1,
-                    minHeight: value ? 3 : 0,
-                    height: `${(value / maximum) * 100}%`,
-                  }}
-                />
-              ))}
-            </span>
-            <span className="month-label">
-              {Number(point.month.slice(5))}월
-            </span>
-          </button>
-        ))}
+        <div
+          className="revenue-bars"
+          style={{
+            minWidth: `${data.length * 44 + Math.max(0, data.length - 1) * 8 + 8}px`,
+          }}
+        >
+          {data.map((point, index) => (
+            <button
+              type="button"
+              className={`bar-group${active?.month === point.month ? " selected" : ""}`}
+              key={point.month}
+              ref={active?.month === point.month ? activeTarget : undefined}
+              aria-pressed={active?.month === point.month}
+              aria-label={`${point.month.slice(0, 4)}년 ${Number(point.month.slice(5))}월 신규 ${won(point.newRevenue)}, 재등록 ${won(point.renewedRevenue)}`}
+              onClick={() => setSelected(point.month)}
+              onFocus={() => setSelected(point.month)}
+            >
+              <span className="bar-pair" aria-hidden="true">
+                {[point.newRevenue, point.renewedRevenue].map(
+                  (value, series) => (
+                    <motion.span
+                      key={series}
+                      className={`revenue-bar${series ? " renewed" : ""}`}
+                      initial={{ scaleY: 0 }}
+                      animate={{
+                        scaleY: 1,
+                        height: `${(value / maximum) * 100}%`,
+                      }}
+                      transition={{
+                        delay: reduced ? 0 : 0.22 + index * 0.025,
+                        duration: reduced ? 0 : 0.32,
+                        ease: "easeOut",
+                      }}
+                      style={{
+                        originY: 1,
+                        minHeight: value ? 3 : 0,
+                        height: `${(value / maximum) * 100}%`,
+                      }}
+                    />
+                  ),
+                )}
+              </span>
+              <span className="month-label">
+                {crossesYear
+                  ? point.month.slice(2).replace("-", ".")
+                  : `${Number(point.month.slice(5))}월`}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
+      {data.length > 5 && (
+        <p className="chart-scroll-hint">좌우로 밀어 월별 매출을 확인하세요.</p>
+      )}
       <div className="chart-readout" role="status">
         {active ? (
           <>

@@ -24,6 +24,12 @@ describe("RLS query boundary", () => {
                   id: `m${offset + index}`,
                   trainer_id: "t1",
                   record_status: "valid",
+                  name: "가상 회원",
+                  status: "active",
+                  remaining_sessions: 11,
+                  expected_end_date: null,
+                  latest_registration_date: "2026-09-08",
+                  updated_at: "2026-09-08T02:00:00Z",
                 })),
               ),
               { status: 200 },
@@ -56,6 +62,13 @@ describe("RLS query boundary", () => {
     expect(
       requests.every((url) => !url.searchParams.get("select")?.includes("*")),
     ).toBe(true);
+    const memberFields = requests
+      .find((url) => url.pathname.endsWith("/members"))
+      ?.searchParams.get("select")
+      ?.split(",");
+    expect(memberFields).toEqual(
+      expect.arrayContaining(["latest_registration_date", "updated_at"]),
+    );
   });
   it("fails explicitly when the database fails instead of substituting sample or zero data", async () => {
     const client = createClient("https://example.supabase.co", "test-key", {

@@ -8,13 +8,14 @@ import type {
 } from "./types";
 
 const dayMs = 86400000;
-export const koreaToday = () =>
+const koreaDate = (date: Date) =>
   new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date());
+  }).format(date);
+export const koreaToday = () => koreaDate(new Date());
 export function parsePeriod(start: unknown, end: unknown): DateRange | null {
   const valid = (value: unknown): value is string =>
     typeof value === "string" &&
@@ -114,9 +115,63 @@ export function buildDashboardData(
           (b.class_date ?? "").localeCompare(a.class_date ?? "") ||
           (b.starts_at ?? "").localeCompare(a.starts_at ?? ""),
       );
+    const balanceClass = completed.find(
+      (row) => row.remaining_sessions !== null,
+    );
+    // A class balance is a historical snapshot, not the current inventory. A
+    // registration on/after that date invalidates it (date-only ties are unknown).
+    // Do not use a class's import/update time: re-syncing history is not a new class.
+    const paidRegistrationDates = rows.registrations
+      .filter((row) => row.member_id === member.id && row.status === "paid")
+      .map((row) => row.registration_date)
+      .filter((date): date is string => date !== null && date <= today)
+      .sort();
+    const registrationDates = [
+      member.latest_registration_date,
+      ...paidRegistrationDates,
+    ];
+    const registrationSinceClass =
+      balanceClass &&
+      registrationDates.some(
+        (date) =>
+          date !== null && date <= today && date >= balanceClass.class_date!,
+      );
+    const currentSnapshotTime = Date.parse(member.updated_at ?? "");
+    const currentSnapshotDate = Number.isFinite(currentSnapshotTime)
+      ? koreaDate(new Date(currentSnapshotTime))
+      : null;
+    const latestPaidRegistration = paidRegistrationDates.at(-1);
+    // Separate sheets can sync at different times. If a paid renewal is newer
+    // than this member snapshot and the member row does not yet acknowledge it,
+    // neither its old balance nor its old end date is current evidence.
+    const currentPredatesRegistration =
+      latestPaidRegistration &&
+      currentSnapshotDate &&
+      currentSnapshotDate < latestPaidRegistration &&
+      (member.latest_registration_date ?? "") < latestPaidRegistration;
+    const currentRemaining = currentPredatesRegistration
+      ? null
+      : member.remaining_sessions;
+    const sourceExpectedEnd = currentPredatesRegistration
+      ? null
+      : member.expected_end_date;
+    const classEventTime = balanceClass
+      ? Date.parse(
+          balanceClass.starts_at ?? `${balanceClass.class_date}T00:00:00+09:00`,
+        )
+      : NaN;
+    // A known current balance wins unless the class is demonstrably newer.
+    // With no class time, compare against the start of its Korean calendar day;
+    // with no current snapshot time, retain the known current value.
+    const classIsNewer =
+      Number.isFinite(currentSnapshotTime) &&
+      classEventTime > currentSnapshotTime;
     const remaining =
-      completed.find((row) => row.remaining_sessions !== null)
-        ?.remaining_sessions ?? member.remaining_sessions;
+      balanceClass &&
+      !registrationSinceClass &&
+      (currentRemaining === null || classIsNewer)
+        ? balanceClass.remaining_sessions
+        : currentRemaining;
     const consumption = sum(
       completed.filter((row) =>
         within(row.class_date, { start: addDays(today, -27), end: today }),
@@ -137,18 +192,22 @@ export function buildDashboardData(
       trainerName: trainerName(member.trainer_id),
       status: member.status,
       remainingSessions: remaining === null ? null : Number(remaining),
-      expectedDepletionDate: member.expected_end_date ?? estimated,
-      estimateBasis: member.expected_end_date
-        ? "source"
-        : estimated
-          ? "pace"
-          : null,
+      expectedDepletionDate: sourceExpectedEnd ?? estimated,
+      estimateBasis: sourceExpectedEnd ? "source" : estimated ? "pace" : null,
       lastClassDate: completed[0]?.class_date ?? null,
     };
   });
   const activeMembers = members.filter(
     (member) => member.status !== "ended" && member.status !== "inactive",
   );
+  const knownBalances = activeMembers.filter(
+    (member) => member.remainingSessions !== null,
+  );
+  const knownSubtotal = sum(
+    knownBalances,
+    (member) => member.remainingSessions,
+  );
+  const unknownMembers = activeMembers.length - knownBalances.length;
   const revenue: RevenuePoint[] = [];
   for (
     let month = period.start.slice(0, 7);
@@ -209,7 +268,12 @@ export function buildDashboardData(
       averageSessions: average(paid, (row) => row.registered_sessions),
       completedClasses: completedClasses.length,
       assignedMembers: activeMembers.length,
-      remainingSessions: sum(activeMembers, (row) => row.remainingSessions),
+      remainingSessions: {
+        total: unknownMembers ? null : knownSubtotal,
+        knownSubtotal,
+        knownMembers: knownBalances.length,
+        unknownMembers,
+      },
     },
     revenue,
     funnel: {
