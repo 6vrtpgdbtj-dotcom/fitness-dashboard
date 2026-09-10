@@ -20,6 +20,7 @@ export type RegistrationRow = RecordScope & {
   registered_sessions: number | null;
   acquisition_source: string | null;
   status: string | null;
+  product?: string | null;
 };
 export type LeadRow = RecordScope & {
   member_id: string | null;
@@ -83,6 +84,7 @@ export type DashboardData = {
   rows: AnalyticsRows;
   metrics: {
     periodRevenue: number;
+    fcRevenue: number;
     totalRevenue: number;
     refunds: number;
     newRegistrations: number;

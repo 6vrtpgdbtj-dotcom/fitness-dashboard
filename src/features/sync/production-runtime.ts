@@ -52,7 +52,7 @@ export function getSyncService() {
         if (!stored) throw new Error("Could not save the source tab.");
         // The fenced RPC resolves the latest scoped administrator-confirmed
         // domain before an ambiguous tab can be skipped.
-        if (stored.is_active && stored.domain) prepared.push({ tab, rows: extractRepeatedTables(scheduleRows, stored.domain), domain: stored.domain, tabId: stored.id });
+        if (stored.is_active && stored.domain) prepared.push({ tab, rows: extractRepeatedTables(scheduleRows, stored.domain, tab.title), domain: stored.domain, tabId: stored.id });
         else if (stored.is_active) {
           // A domain decision can be made only after the administrator sees
           // the source. Keep the same immutable, redacted snapshot contract.

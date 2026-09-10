@@ -6,7 +6,7 @@ const fields = {
   members:
     "id,trainer_id,record_status,name,status,remaining_sessions,expected_end_date,latest_registration_date,updated_at",
   registrations:
-    "id,trainer_id,record_status,member_id,registration_date,registration_type,paid_amount,registered_sessions,acquisition_source,status",
+    "id,trainer_id,record_status,member_id,registration_date,registration_type,paid_amount,registered_sessions,acquisition_source,status,product",
   leads:
     "id,trainer_id,record_status,member_id,lead_date,consultation_date,status,is_registered,acquisition_source",
   classes:

@@ -32,7 +32,7 @@ function exactField(domain: MappingDomain, value: unknown): string | null {
  * ordinary table before mapping so every block is ingested without treating
  * dashboard summary cells as records.
  */
-export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain): unknown[][] {
+export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain, tabTitle = ""): unknown[][] {
   for (let headerRowIndex = 0; headerRowIndex < Math.min(rows.length, 100); headerRowIndex++) {
     const header = rows[headerRowIndex] ?? [];
     const anchors = header.flatMap((cell, index) => exactField(domain, cell) === "name" ? [index] : []);
@@ -64,6 +64,25 @@ export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain):
       }
     }
     return output;
+  }
+  if (domain === "registration") {
+    const month = tabTitle.match(/^(\d{2,4})\.(\d{1,2})$/);
+    const headerIndex = rows.findIndex((row) => row.some((cell) => cell === "회원명") && row.some((cell) => cell === "결제 방법") && row.some((cell) => cell === "구분"));
+    if (month && headerIndex >= 0) {
+      const header = rows[headerIndex];
+      const name = header.indexOf("회원명"), payment = header.indexOf("결제 방법"), type = header.indexOf("구분");
+      const amount = payment - 1;
+      let currentDate = "";
+      const year = Number(month[1]) < 100 ? 2000 + Number(month[1]) : Number(month[1]);
+      const output: unknown[][] = [["회원명", "결제 날짜", "매출", "RE/NEW", "결제방법", "상품"]];
+      for (const row of rows.slice(headerIndex + 1)) {
+        const rawDate = row.slice(0, name).find((cell) => typeof cell === "string" && /\d{1,2}월\s*\d{1,2}일/.test(cell));
+        if (typeof rawDate === "string") { const parts = rawDate.match(/(\d{1,2})월\s*(\d{1,2})일/)!; currentDate = `${year}-${parts[1].padStart(2,"0")}-${parts[2].padStart(2,"0")}`; }
+        const member = row[name], paid = row[amount];
+        if (currentDate && typeof member === "string" && member.trim() && paid !== null && paid !== undefined && String(paid).trim()) output.push([member, currentDate, paid, row[type] ?? "", row[payment] ?? "", `FC ${String(row[name + 1] ?? "").trim() || "회원권"}`]);
+      }
+      if (output.length > 1) return output;
+    }
   }
   return rows;
 }

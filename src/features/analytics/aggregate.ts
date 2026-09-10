@@ -87,6 +87,8 @@ export function buildDashboardData(
     within(row.registration_date, period),
   );
   const paid = registrations.filter((row) => row.status === "paid");
+  const fcPaid = paid.filter((row) => row.product?.startsWith("FC "));
+  const ptPaid = paid.filter((row) => !row.product?.startsWith("FC "));
   const refunded = registrations.filter((row) => row.status === "refunded");
   const consultations = rows.leads.filter(
     (row) =>
@@ -250,7 +252,8 @@ export function buildDashboardData(
     rows,
     realtimeTopic: null,
     metrics: {
-      periodRevenue: sum(paid, (row) => row.paid_amount),
+      periodRevenue: sum(ptPaid, (row) => row.paid_amount),
+      fcRevenue: sum(fcPaid, (row) => row.paid_amount),
       totalRevenue: sum(
         rows.registrations.filter((row) => row.status === "paid"),
         (row) => row.paid_amount,

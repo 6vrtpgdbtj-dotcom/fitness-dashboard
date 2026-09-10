@@ -170,11 +170,18 @@ export function DashboardView({
       <DashboardMotion role={scope.role}>
         <MotionSection className="metrics-strip">
           <MetricCard
-            label="선택 기간 결제 매출"
+            label="선택 기간 PT 매출"
             value={number(metrics.periodRevenue)}
             unit="원"
             detail={`전체 누적 ${won(metrics.totalRevenue)} · 환불 ${won(metrics.refunds)} 별도`}
             accent
+          />
+          <MetricCard
+            label="선택 기간 FC 매출"
+            value={number(metrics.fcRevenue)}
+            unit="원"
+            detail="회원권·락커·운동복 등 FC 결제"
+            index={1}
           />
           <MetricCard
             label="등록 현황"
