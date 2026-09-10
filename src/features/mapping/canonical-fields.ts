@@ -10,8 +10,8 @@ const identity = [
 const acquisition = field("acquisition_source", "유입경로", ["가입경로", "유입채널", "방문경로"]);
 const goal = field("exercise_goal", "운동목표", ["운동목적", "상담목적"]);
 const paid = field("paid_amount", "실결제금액", ["결제액", "매출", "결제금액", "실결제액", "입금액"], ["money", "integer"]);
-const registered = field("registered_sessions", "등록횟수", ["등록회차", "등록수업수", "등록세션"], ["integer"]);
-const registrationDate = field("registration_date", "등록일", ["등록날짜", "결제일", "등록일자"], ["date"]);
+const registered = field("registered_sessions", "등록횟수", ["등록회차", "등록수업수", "등록세션", "세션"], ["integer"]);
+const registrationDate = field("registration_date", "등록일", ["등록날짜", "결제일", "결제날짜", "등록일자"], ["date"]);
 const remaining = field("remaining_sessions", "잔여횟수", ["남은횟수", "잔여수업", "잔여세션"], ["integer"]);
 const endDate = field("expected_end_date", "종료예정일", ["만료일", "종료일", "예상종료일"], ["date"]);
 
@@ -31,7 +31,7 @@ export const canonicalFields: Record<MappingDomain, readonly CanonicalField[]> =
   ],
   registration: [...identity, acquisition, paid, registered, registrationDate, endDate,
     field("external_registration_id", "등록ID", ["등록번호", "결제번호"], ["identifier", "integer", "freeText"]),
-    field("registration_type", "등록구분", ["등록유형", "신규재등록"], ["status", "freeText"]),
+    field("registration_type", "등록구분", ["등록유형", "신규재등록", "renew", "renewal"], ["status", "freeText"]),
     field("product", "상품", ["상품명", "등록상품", "프로그램"]),
     field("list_amount", "정가", ["정상금액", "정가금액"], ["money", "integer"]),
     field("price_per_session", "회당단가", ["회당금액", "수업단가"], ["money", "integer"]),

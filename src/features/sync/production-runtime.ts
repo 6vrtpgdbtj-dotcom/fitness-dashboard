@@ -6,7 +6,7 @@ import { createSyncService, type Connection, type Watch, type SyncDependencies }
 import { createRpcSyncRepository, rpc } from "./supabase-repository";
 import { applySync, redactSourceRows } from "./apply-sync";
 import { mapColumns } from "../mapping/map-columns";
-import { discoverDomain } from "./sheet-pipeline";
+import { discoverDomain, extractRepeatedTables, extractScheduleGrid } from "./sheet-pipeline";
 import type { ConfirmedMapping, MappingDomain } from "../mapping/types";
 import type { SyncResult } from "./types";
 import { fingerprint, stableJson } from "./fingerprint";
@@ -35,26 +35,28 @@ export function getSyncService() {
     async execute(connection, lease) {
       const db = database(); const auth = await getAuthorizedGoogleClient(connection.id);
       const sheets = google.sheets({ version: "v4", auth });
-      const metadata = await sheets.spreadsheets.get({ spreadsheetId: connection.spreadsheetId, fields: "sheets.properties(sheetId,title)" }, { timeout: 15000 });
+      const metadata = await sheets.spreadsheets.get({ spreadsheetId: connection.spreadsheetId, fields: "properties.title,sheets.properties(sheetId,title)" }, { timeout: 15000 });
+      const spreadsheetTitle = metadata.data.properties?.title ?? "";
       const tabs = (metadata.data.sheets ?? []).flatMap((sheet) => typeof sheet.properties?.sheetId === "number" && sheet.properties.title ? [{ googleSheetId: sheet.properties.sheetId, title: sheet.properties.title }] : []);
       const total = emptyResult();
       // Apply members first to resolve organization-scoped links in other tabs.
       const prepared: Array<{ tab: typeof tabs[number]; rows: unknown[][]; domain: MappingDomain; tabId: string }> = [];
       for (const tab of tabs) {
         const values = await sheets.spreadsheets.values.get({ spreadsheetId: connection.spreadsheetId, range: `'${tab.title.replaceAll("'", "''")}'`, valueRenderOption: "FORMATTED_VALUE", dateTimeRenderOption: "FORMATTED_STRING" }, { timeout: 15000 });
-        const rows: unknown[][] = values.data.values ?? [];
+        const sourceRows: unknown[][] = values.data.values ?? [];
+        const scheduleRows = extractScheduleGrid(sourceRows, tab.title, spreadsheetTitle);
         const previous = checked(await db.from("sheet_tabs").select("id,domain,is_active").eq("organization_id", connection.organizationId).eq("source_connection_id", connection.id).eq("google_sheet_id", tab.googleSheetId).maybeSingle());
         if (previous?.is_active === false) continue;
-        const proposedDomain: MappingDomain | null = previous?.domain ?? discoverDomain(tab.title, rows);
+        const proposedDomain: MappingDomain | null = previous?.domain ?? (scheduleRows !== sourceRows ? "class" : discoverDomain(tab.title, sourceRows));
         const stored = await rpc<{ id: string; domain: MappingDomain | null; is_active: boolean }>(db, "sync_upsert_tab", { p_organization_id: connection.organizationId, p_connection_id: connection.id, p_lease: lease, p_google_sheet_id: tab.googleSheetId, p_title: tab.title, p_domain: proposedDomain });
         if (!stored) throw new Error("Could not save the source tab.");
         // The fenced RPC resolves the latest scoped administrator-confirmed
         // domain before an ambiguous tab can be skipped.
-        if (stored.is_active && stored.domain) prepared.push({ tab, rows, domain: stored.domain, tabId: stored.id });
+        if (stored.is_active && stored.domain) prepared.push({ tab, rows: extractRepeatedTables(scheduleRows, stored.domain), domain: stored.domain, tabId: stored.id });
         else if (stored.is_active) {
           // A domain decision can be made only after the administrator sees
           // the source. Keep the same immutable, redacted snapshot contract.
-          const redacted = redactSourceRows(rows);
+          const redacted = redactSourceRows(sourceRows);
           await createRpcSyncRepository(db, lease).insertSnapshot({
             scope: { organizationId: connection.organizationId, sourceConnectionId: connection.id, sourceTabId: stored.id },
             snapshotKey: fingerprint(redacted), capturedAt: new Date().toISOString(), sourcePayload: { rows: redacted },

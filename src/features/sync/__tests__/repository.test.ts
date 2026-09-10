@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createRpcSyncRepository, type RpcClient } from "../supabase-repository";
 import { applySync } from "../apply-sync";
 import { mapColumns } from "../../mapping/map-columns";
-import { discoverDomain } from "../sheet-pipeline";
+import { discoverDomain, extractRepeatedTables, extractScheduleGrid } from "../sheet-pipeline";
 
 describe("production repository boundary", () => {
   it("commits records and audits in one fenced RPC after the independent snapshot", async () => {
@@ -32,5 +32,34 @@ describe("tab discovery", () => {
     expect(discoverDomain("월별 결제", [["회원명", "등록일", "실결제금액"], ["민수", "2026-09-01", 100000]])).toBe("registration");
     expect(discoverDomain("시간표", [["회원명", "수업일", "수업시간"], ["민수", "2026-09-01", "14:00"]])).toBe("class");
     expect(discoverDomain("기타", [["이름", "메모"], ["민수", "hello"]])).toBeNull();
+  });
+  it("extracts side-by-side registration tables with merged amount headers", () => {
+    const rows = [
+      ["요약", "", "", "", "", "", "", "", "", "", "", ""],
+      ["", "회원명", "세션", "결제 날짜", "매출", "", "", "RE/NEW", "담당트레이너", "유입경로", "결제방법", "", "회원명", "세션", "결제 날짜", "매출", "", "", "RE/NEW", "담당트레이너", "유입경로", "결제방법"],
+      ["", "김회원", 10, "2026-09-01", "600,000", "", "", "신규", "박코치", "소개", "카드", "", "이회원", 20, "2026-09-02", "900,000", "", "", "재등록", "이코치", "워크인", "현금"],
+      ["", "", "", "", "", "", "", "", "", "", "", "", "박회원", 30, "2026-09-03", "1,200,000", "", "", "신규", "이코치", "검색", "카드"],
+    ];
+    expect(extractRepeatedTables(rows, "registration")).toEqual([
+      ["회원명", "세션", "결제 날짜", "매출", "RE/NEW", "담당트레이너", "유입경로", "결제방법"],
+      ["김회원", 10, "2026-09-01", "600,000", "신규", "박코치", "소개", "카드"],
+      ["이회원", 20, "2026-09-02", "900,000", "재등록", "이코치", "워크인", "현금"],
+      ["박회원", 30, "2026-09-03", "1,200,000", "신규", "이코치", "검색", "카드"],
+    ]);
+  });
+  it("turns a daily trainer grid into class records", () => {
+    const rows = [
+      ["", "", "지세환", "", "박세준", "", "정윤수", ""],
+      ["", "7:00", "", "", "", "", "", ""],
+      ["", "8:00", "", "", "이정임23/50", "", "", ""],
+      ["", "9:00", "", "", "배수정34/50", "", "식사", ""],
+      ["", "10:00", "", "", "", "", "김민정 20/25", ""],
+    ];
+    expect(extractScheduleGrid(rows, "1", "중산점 스케줄 26.09")).toEqual([
+      ["회원명", "수업일", "수업시작시간", "담당트레이너", "잔여횟수"],
+      ["이정임", "2026-09-01", "08:00", "박세준", 23],
+      ["배수정", "2026-09-01", "09:00", "박세준", 34],
+      ["김민정", "2026-09-01", "10:00", "정윤수", 20],
+    ]);
   });
 });

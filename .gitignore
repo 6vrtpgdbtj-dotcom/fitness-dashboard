@@ -13,3 +13,4 @@ output/playwright/
 outputs/
 *.png
 *.inspect.ndjson
+.vercel
