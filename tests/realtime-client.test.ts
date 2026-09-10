@@ -1,0 +1,34 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { createClient } from "../src/lib/supabase/client";
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers(); });
+it("authenticates SDK requests with short-lived handoff tokens without reading or writing browser auth storage", async () => {
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://realtime-test.supabase.co");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-key");
+  const cookieRead = vi.spyOn(document, "cookie", "get");
+  const cookieWrite = vi.spyOn(document, "cookie", "set");
+  const storageRead = vi.spyOn(Storage.prototype, "getItem");
+  const storageWrite = vi.spyOn(Storage.prototype, "setItem");
+  let clock = Date.now(), token = "short-lived-one", denied = false;
+  vi.spyOn(Date, "now").mockImplementation(() => clock);
+  const received: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, options?: RequestInit) => {
+    if (url === "/api/realtime/token") return Response.json(denied ? { error: "unauthorized" } : { accessToken: token, expiresAt: Math.floor(clock / 1000) + 3600 }, { status: denied ? 403 : 200 });
+    received.push(new Headers(options?.headers).get("authorization") ?? "");
+    return Response.json([]);
+  }));
+  const client = createClient();
+  await client.from("members").select("id");
+  expect(received.at(-1)).toBe("Bearer short-lived-one");
+  token = "short-lived-two"; clock += 31_000;
+  await client.realtime.setAuth();
+  expect(client.realtime.accessTokenValue).toBe("short-lived-two");
+  denied = true; clock += 31_000;
+  await client.realtime.setAuth();
+  expect(client.realtime.accessTokenValue).not.toBe("short-lived-two");
+  expect(cookieRead).not.toHaveBeenCalled();
+  expect(cookieWrite).not.toHaveBeenCalled();
+  expect(storageRead).not.toHaveBeenCalled();
+  expect(storageWrite).not.toHaveBeenCalled();
+  expect(fetch).toHaveBeenCalledWith("/api/realtime/token", { method: "POST", credentials: "same-origin", cache: "no-store" });
+  await client.removeAllChannels();
+});

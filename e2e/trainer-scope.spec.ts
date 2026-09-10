@@ -15,7 +15,7 @@ test("trainer sample uses the scoped dashboard and omits administrator controls"
   await expect(page.locator(".trainer-comparison")).toHaveCount(0);
 });
 
-test.describe("live Supabase trainer session", () => {
+test.describe("deployment prerequisite: live Supabase trainer session", () => {
   test.skip(!process.env.E2E_TRAINER_STATE || !process.env.E2E_BASE_URL, "Requires a seeded trainer and real OAuth storage state; sample UI is not an RLS test.");
   test.use({ storageState: process.env.E2E_TRAINER_STATE });
   test("approved trainer is redirected from settings and denied administrator APIs", async ({ page }) => {

@@ -14,7 +14,7 @@ test("app responses prevent framing and MIME sniffing", async ({ page }) => {
   expect(response.headers()["x-content-type-options"]).toBe("nosniff");
 });
 
-test.describe("live Supabase administrator session", () => {
+test.describe("deployment prerequisite: live Supabase administrator session", () => {
   test.skip(!process.env.E2E_ADMIN_STATE || !process.env.E2E_BASE_URL, "Requires an isolated migrated Supabase and an approved administrator OAuth storage state; see docs/browser-qa.md.");
   test.use({ storageState: process.env.E2E_ADMIN_STATE });
   test("approved login reaches settings and connects the deterministic Google sheet", async ({ page }) => {

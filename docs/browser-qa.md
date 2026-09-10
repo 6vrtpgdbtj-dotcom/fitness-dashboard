@@ -9,10 +9,14 @@ the production build. Screenshots, failure traces and CLI evidence are under
 
 The local suite checks actual browser rendering at 1440×900, 768×1024 and 390×844
 for both roles; no page overflow; keyboard focus; chart/table interaction;
-44px mobile targets; mobile class/renewal ordering; reduced motion; loading and
+44px mobile targets; mobile class/renewal ordering; reduced motion; loading-to-loaded
+metric/chart bounds at all three viewports for both roles; loading and
 failure screens; login error copy; callback redirect handling; anonymous route
 protection; and response headers. `/demo` is fictional data, not an auth bypass
-or proof of database isolation.
+or proof of database isolation. Bounds assertions compare left edge/width within
+1px and reserved height within 15% of the representative loaded panel. They are
+not a full-route CLS guarantee: toolbars and variable-length work queues move
+the panels vertically, and the production route fallback has a different shell.
 
 ## Live Supabase gate — not executed in this environment
 
@@ -24,7 +28,8 @@ Use a dedicated disposable Supabase project, apply every migration, and execute
 `supabase/tests/rls.sql` using the setup in `supabase/README.md`. Seed an approved
 administrator, an active trainer and a second tenant. Configure Google identity
 login, app callback allowlist and the separate Sheets OAuth client. Log in as each
-role via the real Google button and save separate Playwright storage states outside
+role via the real Google button on the exact origin/protocol used by the test
+server (cookie domain/Secure rules still apply) and save separate Playwright storage states outside
 version control. These state files contain credentials and must never be attached
 as QA evidence. Set `E2E_ADMIN_STATE`, `E2E_TRAINER_STATE` to their absolute paths.
 The automated session tests consume an existing real login; they do not automate
@@ -81,6 +86,66 @@ idempotence separately; live acceptance must also confirm one canonical member.
    admin API access, second-tenant isolation, and Realtime refresh after token
    renewal. Inactive and unapproved accounts must be refused.
 
-The HttpOnly session architecture, edge rate limits/payload limits and strict script
-CSP still require resolution or explicit operational acceptance; see the numbered
-findings in `security-review.md`.
+## Executable deployment acceptance — blocked until prerequisites are supplied
+
+Do not count the following three skipped journeys as passed. An operator must
+provide an isolated migrated Supabase project, approved admin/trainer accounts,
+second-tenant fixtures, Google OAuth setup, canonical HTTPS origin and fresh
+storage states. Run from this checkout with those environment variables set:
+
+```powershell
+# No credentials or authenticated state files belong in source control/artifacts.
+pnpm playwright test --grep 'live Supabase administrator session' --workers=1
+pnpm playwright test --grep 'live Supabase trainer session' --workers=1
+# Separate fixture-server outage setup described above is required for this run.
+pnpm playwright test --grep 'live Google failure and Supabase reconciliation' --workers=1
+```
+
+Record each actual pass/fail and the deployment revision; any skip is still a
+blocked acceptance item. Also execute `supabase/tests/rls.sql` and the real-Google
+smoke above; the transport fixture cannot establish Google consent/webhook behavior.
+
+For the HttpOnly migration and Realtime gate, use HTTPS and real sessions (no
+Google fixture), then record only redacted results, never token values:
+
+1. Before rollout, revoke pre-change sessions through Supabase Auth's administrator
+   session-revocation controls and require fresh login. Allow issued access JWTs
+   to expire according to the project's revocation semantics; Google consent
+   revocation alone is not Supabase session revocation. Clear old app browser storage
+   and cookies; do not reuse old Playwright states. Merely deploying HttpOnly does
+   not invalidate an already-stolen refresh token or rewrite an existing cookie.
+2. Fresh Google login: inspect `sb-…-auth-token` and PKCE cookie writes in browser
+   Network/Application panels; every chunk must be HttpOnly, Secure, SameSite=Lax,
+   Path=/, with no broad Domain. `document.cookie` must not contain auth chunks;
+   localStorage/sessionStorage must contain no Supabase session. Inspect response
+   headers locally, but do not save token-bearing HAR/traces/screenshots.
+3. In the signed-in browser console run the following assertion-only check:
+
+   ```javascript
+   const r = await fetch('/api/realtime/token', {method:'POST', credentials:'same-origin', cache:'no-store'});
+   const b = await r.json();
+   console.assert(r.status === 200 && r.headers.get('cache-control').includes('no-store'));
+   console.assert(Object.keys(b).sort().join(',') === 'accessToken,expiresAt');
+   console.assert(typeof b.accessToken === 'string' && b.expiresAt > Date.now()/1000);
+   // Do not print b or persist its accessToken.
+   ```
+
+   A credentialed request with a foreign/absent Origin must return 403 without
+   accessing Auth. Test using the isolated Playwright request context, not a
+   command containing a copied credential. Inactive/unapproved accounts must
+   receive 403; signed-out accounts must receive 401 when configured normally.
+4. Keep an authenticated dashboard open past the configured JWT expiry (or use
+   a short TTL only in the isolated project). Confirm the heartbeat handoff
+   rotates cookies with all attributes retained, the private channel remains
+   subscribed, and a real sheet-sync event refreshes the dashboard once. Repeat
+   after network disconnect/reconnect and with both roles; unrelated tenant
+   events/rows must remain inaccessible. Do not infer success solely from the
+   status text or a mocked SDK.
+5. Deactivate a test profile while its page remains open; after the next handoff
+   refresh, verify the endpoint denies it and private data/events are inaccessible.
+   Account/session revocation semantics and RLS must be checked on the deployed
+   Supabase service; local source tests do not establish provider revocation.
+
+Edge rate/payload limits and strict script CSP still require resolution or explicit
+operational acceptance; see numbered findings in `security-review.md`. No production
+security sign-off is implied by deterministic local tests.

@@ -12,12 +12,15 @@ export function DashboardLoading() {
       <p className="eyebrow">LOADING DATA</p>
       <h2>운영 데이터를 불러오고 있습니다.</h2>
       <p className="muted">담당 범위의 유효한 기록을 확인합니다.</p>
-      <div className="skeleton-metrics" aria-hidden="true">
-        {[0, 1, 2, 3].map((item) => (
-          <span key={item} />
-        ))}
+      <div className="dashboard-flow" aria-hidden="true">
+        <div className="metrics-strip skeleton-metrics">
+          {[0, 1, 2, 3].map((item) => (
+            <span className="metric-cell" key={item} />
+          ))}
+        </div>
+        <div className="dashboard-revenue skeleton-chart" />
+        <div className="dashboard-funnel skeleton-funnel" />
       </div>
-      <div className="skeleton-chart" aria-hidden="true" />
     </section>
   );
 }

@@ -5,12 +5,13 @@
 Reviewed the Next.js 15.5.25 / React / TypeScript application, Supabase migrations,
 Google OAuth/read/sync boundaries and production dependencies. No confirmed
 critical vulnerability was found. Fixed an application-level CSRF gap, missing
-Secure session-cookie enforcement, missing framing/MIME headers, and two high
+Secure/HttpOnly session-cookie enforcement, missing framing/MIME headers, and two high
 PostCSS dependency advisories. Known production dependency audit is now clean.
 
-**This is not a production security sign-off.** Browser Supabase sessions remain
-JavaScript-readable for the existing Realtime integration; edge rate/payload
-limits and strict script CSP are unverified/unresolved. Real Supabase/Google
+**This is not a production security sign-off.** Refresh sessions are now server-
+owned HttpOnly cookies, with an authenticated in-memory access-token handoff for
+Realtime. Live migration/renewal acceptance, edge rate/payload limits and strict
+script CSP are unverified/unresolved. Real Supabase/Google
 login, deployed RLS and HTTPS cookie round trips could not be exercised without
 credentials/infrastructure. Three live browser tests explicitly skip and the
 manual acceptance procedure is in `docs/browser-qa.md`.
@@ -74,32 +75,59 @@ test or proof that unknown vulnerabilities do not exist.
 
 ## Medium
 
-### 3. Session cookies lacked Secure enforcement — resolved; HttpOnly remains open
+### 3. Session-cookie Secure/HttpOnly hardening — implementation resolved; live rollout open
 
 - Rule: NEXT-SESS-001 / REACT-AUTH-001.
 - Evidence: installed `node_modules/@supabase/ssr/src/utils/constants.ts:5-6`
   defaults to `sameSite: "lax", httpOnly: false` and no Secure attribute.
-  Final `src/lib/supabase/cookie-options.ts:3-8` forces Secure in production or
-  configured HTTPS; `src/lib/supabase/server.ts:11,16`, `src/middleware.ts:22,28`
-  and `src/lib/supabase/client.ts:9` share the policy.
+  Final `src/lib/supabase/cookie-options.ts:3-10` forces HttpOnly on every write
+  and Secure in production or configured HTTPS; `src/lib/supabase/server.ts:11,16`, `src/middleware.ts:22,28`
+  share the policy. `tests/ssr-cookie-security.test.ts` uses the real installed
+  server SDK and cookie adapter, including a token rotation HTTP fixture.
 - Impact: without Secure, browser session cookies may travel over HTTP. With
   HttpOnly absent, any future same-origin script compromise can steal the
   Supabase refresh token. No exploitable XSS sink was found in app sources.
-- Fix applied: enforce Secure and SameSite=Lax on initial writes and refreshes.
-  Required remaining architecture: server-managed refresh sessions plus a short-
-  lived in-memory access token handoff/renewal for Realtime, then HttpOnly cookies.
+- Fix applied: server Auth owns all refresh-session/PKCE cookies (HttpOnly,
+  Secure, SameSite=Lax). `src/lib/supabase/client.ts:8-36` uses the supported
+  `accessToken` callback, not `createBrowserClient` or browser Auth storage.
+  `src/app/api/realtime/token/route.ts:8-21` validates canonical Origin, verifies
+  Auth user + active trusted profile, then returns only the existing expiring
+  access JWT and expiry; no refresh token, provider token or user payload. All
+  responses are no-store. Missing, expired/mismatched sessions fail closed.
+  The callback deduplicates concurrent requests, caches at most 20 seconds in
+  memory, renews through the SDK heartbeat, and clears stale authorization on
+  failures (`client.ts:15-29`). It does not mint an additional long-lived token.
+- Library evidence: installed `@supabase/supabase-js` 2.115.0 source
+  `node_modules/@supabase/supabase-js/src/SupabaseClient.ts:346-362` disables the
+  browser Auth client when `accessToken` is supplied; `:383-397` passes its
+  callback to Realtime. Installed realtime-js 2.115.0 source
+  `node_modules/.pnpm/@supabase+realtime-js@2.115.0/node_modules/@supabase/realtime-js/src/RealtimeClient.ts:306-307,738-742`
+  renews on connection/heartbeat, and `:660-679` updates joined channels. At
+  `:635-642` a thrown callback would retain an old token, so our callback returns
+  null on failure (the Supabase wrapper then uses the anonymous key, which cannot
+  authorize the existing private/RLS-protected topics).
 - Mitigation: HTTPS deployment, short access-token lifetimes/refresh rotation,
   strict script CSP and no untrusted HTML rendering.
-- False-positive limits: `src/components/dashboard/realtime-refresh.tsx:13-16`
-  obtains a browser Supabase client. Making its existing shared cookies HttpOnly
-  silently breaks authenticated Realtime; this task preserves that interface.
-  Google provider refresh credentials are separately encrypted and server-only.
-  The remaining Medium rating is a session hardening/design gap against this
-  task's HttpOnly requirement, not a confirmed exploitable vulnerability or an
-  assertion that Supabase's supported browser-session design is inherently unsafe.
-- Verification: middleware cookie regression observed `secure: undefined` before
-  the fix and `true` afterward. Real HTTPS login/refresh attributes remain a
-  deployment check. **HttpOnly requirement is not met or signed off.**
+- False-positive limits: Supabase's default browser-session design was a supported
+  integration, not itself proof of an exploit. This Medium item was hardening debt
+  against the specified HttpOnly requirement; no exploitable XSS was found.
+  HttpOnly prevents reading the refresh cookie, not same-origin XSS from calling
+  the handoff endpoint or acting as the user. The access JWT remains necessarily
+  visible in browser memory/WebSocket traffic until expiry. Existing private
+  topics, server authorization and RLS remain essential. Google provider refresh
+  credentials remain encrypted and server-only.
+- Verification: initial real-SDK regression observed `httpOnly: false`; initial
+  browser-SDK regression used the anonymous key rather than the handoff JWT.
+  Both now pass, as do real-SDK refresh rotation, handoff negative tests and
+  unchanged Realtime component tests. These are deterministic SDK/route tests,
+  **not a real hosted Realtime or Google renewal success claim**.
+- Open deployment acceptance: invalidate pre-change refresh sessions, clear old
+  browser session storage and require fresh login; changing flags does not
+  retroactively protect already-issued cookies/tokens. Re-capture test storage
+  states only after HTTPS cookie inspection. Execute initial login, expiry/refresh,
+  private-channel update and inactive-profile checks in `docs/browser-qa.md`.
+  The implementation meets the cookie requirement locally; operational rollover
+  and real-provider renewal remain blocked on external credentials/infrastructure.
 
 ### 4. Distributed rate limits and request payload ceilings — deployment gate
 

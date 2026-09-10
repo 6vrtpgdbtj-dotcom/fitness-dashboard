@@ -12,7 +12,7 @@ test("partial failure preserves the usable dashboard and offers recovery guidanc
   await expect(page.getByRole("button", { name: "다시 불러오기" })).toBeEnabled();
 });
 
-test.describe("live Google failure and Supabase reconciliation", () => {
+test.describe("deployment prerequisite: live Google failure and Supabase reconciliation", () => {
   test.skip(!process.env.E2E_ADMIN_STATE || !process.env.E2E_BASE_URL || !process.env.E2E_CONNECTION_ID || !process.env.CRON_SECRET, "Requires isolated seeded Supabase, Google fixture preloader and connection ID; see docs/browser-qa.md.");
   test.use({ storageState: process.env.E2E_ADMIN_STATE });
   test("failed Google read is retried by reconciliation without duplicate canonical records", async ({ page }) => {
