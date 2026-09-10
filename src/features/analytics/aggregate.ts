@@ -202,6 +202,7 @@ export function buildDashboardData(
   const activeMembers = members.filter(
     (member) => member.status !== "ended" && member.status !== "inactive",
   );
+  const uniqueMemberCount = (items: MemberSummary[]) => new Set(items.map((member) => `${member.trainerId ?? "unassigned"}:${member.name.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase()}`)).size;
   const knownBalances = activeMembers.filter(
     (member) => member.remainingSessions !== null,
   );
@@ -270,7 +271,7 @@ export function buildDashboardData(
       averagePayment: average(paid, (row) => row.paid_amount),
       averageSessions: average(paid, (row) => row.registered_sessions),
       completedClasses: completedClasses.length,
-      assignedMembers: activeMembers.length,
+      assignedMembers: uniqueMemberCount(activeMembers),
       remainingSessions: {
         total: unknownMembers ? null : knownSubtotal,
         knownSubtotal,
@@ -343,8 +344,7 @@ export function buildDashboardData(
             classes: completedClasses.filter(
               (row) => row.trainer_id === trainer.id,
             ).length,
-            members: activeMembers.filter((row) => row.trainerId === trainer.id)
-              .length,
+            members: uniqueMemberCount(activeMembers.filter((row) => row.trainerId === trainer.id)),
           }))
         : [],
     connections: rows.connections,
