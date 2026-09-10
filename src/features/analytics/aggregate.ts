@@ -83,11 +83,17 @@ export function buildDashboardData(
         row.record_status === "valid" &&
         (scope.role === "admin" || row.trainer_id === scope.trainerId),
     );
+  const classMap = new Map<string, AnalyticsRows["classes"][number]>();
+  for (const row of permitted(input.classes)) {
+    const key = `${row.trainer_id ?? ""}:${row.class_date ?? ""}:${row.starts_at ?? ""}`;
+    const previous = classMap.get(key);
+    if (!previous || (!previous.external_class_id?.startsWith("schedule|") && row.external_class_id?.startsWith("schedule|"))) classMap.set(key, row);
+  }
   const rows: AnalyticsRows = {
     members: permitted(input.members),
     registrations: permitted(input.registrations),
     leads: permitted(input.leads),
-    classes: permitted(input.classes),
+    classes: [...classMap.values()],
     trainers: input.trainers.filter(
       (row) => scope.role === "admin" || row.id === scope.trainerId,
     ),
