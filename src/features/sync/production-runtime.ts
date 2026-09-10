@@ -22,7 +22,7 @@ export function getSyncService() {
   // before Google/Supabase have been configured.
   const database = () => createAdminClient();
   const deps: SyncDependencies = {
-    secret: process.env.GOOGLE_WATCH_SECRET ?? "",
+    secret: process.env.GOOGLE_NOTIFICATION_SECRET || process.env.GOOGLE_WATCH_SECRET || "",
     notificationUrl: `${(process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "")}/api/google/notifications`,
     now: () => new Date(), random: Math.random, sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     async getConnection(id) {

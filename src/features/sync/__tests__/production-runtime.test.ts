@@ -14,6 +14,19 @@ vi.mock("googleapis", () => ({ google: { sheets: () => ({ spreadsheets: {
 afterEach(() => { vi.unstubAllEnvs(); });
 
 describe("production ingestion", () => {
+  it.each(["canonical", "legacy", "both"])("registers watches using %s notification secret configuration", async (mode) => {
+    vi.stubEnv("GOOGLE_NOTIFICATION_SECRET", mode === "legacy" ? undefined : "canonical-notification-secret-at-least-32-characters");
+    vi.stubEnv("GOOGLE_WATCH_SECRET", mode === "canonical" ? undefined : mode === "both" ? "short-invalid-legacy" : "legacy-notification-secret-at-least-32-characters");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://example.com");
+    const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: { id: "conn", organization_id: "org", spreadsheet_id: "sheet", is_active: true }, error: null }) };
+    boundary.database = {
+      from: () => query,
+      async rpc(name: string) { return { data: name === "sync_acquire" ? "lease" : null, error: null }; },
+    };
+    const watch = await getSyncService().registerWatch("conn");
+    expect(watch.channelId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(watch.expiration.getTime()).toBeGreaterThan(Date.now());
+  });
   it("never sends a remote channel stop after watch activation loses its lease", async () => {
     vi.stubEnv("GOOGLE_WATCH_SECRET", "a-stable-random-watch-secret-at-least-32-characters");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://example.com");
