@@ -447,6 +447,8 @@ main {
 .chart-legend i.renewed {
   background: #82956a;
 }
+.chart-legend i.field { background: #5bb7a8; }
+.chart-legend i.ot { background: #d79b4d; }
 .chart-axis {
   display: flex;
   justify-content: space-between;
@@ -508,19 +510,23 @@ main {
   gap: 5px;
 }
 .revenue-bar {
-  width: 50%;
+  width: 25%;
   background: #b6e938;
   border-radius: 3px 3px 0 0;
 }
 .revenue-bar.renewed {
   background: #65774e;
 }
+.revenue-bar.field { background: #4f9f94; }
+.revenue-bar.ot { background: #bd8240; }
 .bar-group.selected .revenue-bar {
   background: var(--accent);
 }
 .bar-group.selected .revenue-bar.renewed {
   background: #8fa873;
 }
+.bar-group.selected .revenue-bar.field { background: #68c7b8; }
+.bar-group.selected .revenue-bar.ot { background: #e5aa59; }
 .month-label {
   position: absolute;
   top: calc(100% + 8px);

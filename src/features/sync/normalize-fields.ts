@@ -60,7 +60,7 @@ const statusAliases: Record<MappingDomain, Record<string, string>> = {
   lead: { new: "new", 신규: "new", 문의: "new", 상담예정: "scheduled", 예약: "scheduled", scheduled: "scheduled", 상담완료: "consulted", consulted: "consulted", 등록: "registered", 등록완료: "registered", registered: "registered", 미등록: "not_registered", not_registered: "not_registered", 취소: "cancelled", cancelled: "cancelled" },
   class: { 출석: "completed", 완료: "completed", 수업완료: "completed", completed: "completed", 예약: "scheduled", 예정: "scheduled", scheduled: "scheduled", 취소: "cancelled", cancelled: "cancelled", 결석: "no_show", 노쇼: "no_show", no_show: "no_show" },
 };
-const categories: Record<string, string> = { 신규: "new", 첫등록: "new", new: "new", 재등록: "renewal", 연장: "renewal", renewal: "renewal", 추가: "additional", 추가등록: "additional", additional: "additional" };
+const categories: Record<string, string> = { 신규: "new", 첫등록: "new", new: "new", 재등록: "renewal", 연장: "renewal", renewal: "renewal", 필드: "field", field: "field", 오티: "ot", ot: "ot", 추가: "additional", 추가등록: "additional", additional: "additional", 미분류: "uncategorized", 미확인: "uncategorized", unknown: "uncategorized", uncategorized: "uncategorized" };
 const dates = new Set(["birth_date", "first_consultation_date", "first_registration_date", "latest_registration_date", "expected_end_date", "registration_date", "lead_date", "consultation_date", "class_date"]);
 const numeric = new Set(["remaining_sessions", "total_registered_sessions", "total_paid_amount", "registered_sessions", "list_amount", "paid_amount", "price_per_session", "discount_amount", "deducted_sessions"]);
 const hintFields = new Set(["name", "external_member_id", "trainer_name", "sales_trainer_name"]);

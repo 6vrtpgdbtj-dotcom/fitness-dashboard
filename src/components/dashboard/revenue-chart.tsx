@@ -27,19 +27,19 @@ export function RevenueChart({ data }: { data: RevenuePoint[] }) {
   }, [active?.month, data.length]);
   const maximum = Math.max(
     1,
-    ...data.flatMap((row) => [row.newRevenue, row.renewedRevenue]),
+    ...data.flatMap((row) => [row.newRevenue, row.renewedRevenue, row.fieldRevenue ?? 0, row.otRevenue ?? 0]),
   );
   const total = data.reduce(
     (sum, row) =>
-      sum + row.newRevenue + row.renewedRevenue + row.additionalRevenue,
+      sum + row.newRevenue + row.renewedRevenue + (row.fieldRevenue ?? 0) + (row.otRevenue ?? 0) + row.additionalRevenue + (row.uncategorizedRevenue ?? 0),
     0,
   );
   return (
     <div className="revenue-story">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">REVENUE / 등록 매출</p>
-          <h2>신규·재등록 매출의 흐름</h2>
+          <p className="eyebrow">PT TEAM REVENUE</p>
+          <h2>PT 팀 매출 유형별 흐름</h2>
         </div>
         <ArrowUpRight size={23} aria-hidden="true" />
       </div>
@@ -57,6 +57,8 @@ export function RevenueChart({ data }: { data: RevenuePoint[] }) {
             <i className="renewed" />
             재등록
           </span>
+          <span><i className="field" />필드</span>
+          <span><i className="ot" />OT</span>
         </div>
       </div>
       <div className="chart-axis">
@@ -83,16 +85,16 @@ export function RevenueChart({ data }: { data: RevenuePoint[] }) {
               key={point.month}
               ref={active?.month === point.month ? activeTarget : undefined}
               aria-pressed={active?.month === point.month}
-              aria-label={`${point.month.slice(0, 4)}년 ${Number(point.month.slice(5))}월 신규 ${won(point.newRevenue)}, 재등록 ${won(point.renewedRevenue)}`}
+              aria-label={`${point.month.slice(0, 4)}년 ${Number(point.month.slice(5))}월 신규 ${won(point.newRevenue)}, 재등록 ${won(point.renewedRevenue)}, 필드 ${won(point.fieldRevenue ?? 0)}, OT ${won(point.otRevenue ?? 0)}`}
               onClick={() => setSelected(point.month)}
               onFocus={() => setSelected(point.month)}
             >
               <span className="bar-pair" aria-hidden="true">
-                {[point.newRevenue, point.renewedRevenue].map(
+                {[point.newRevenue, point.renewedRevenue, point.fieldRevenue ?? 0, point.otRevenue ?? 0].map(
                   (value, series) => (
                     <motion.span
                       key={series}
-                      className={`revenue-bar${series ? " renewed" : ""}`}
+                      className={`revenue-bar ${["new", "renewed", "field", "ot"][series]}`}
                       initial={{ scaleY: 0 }}
                       animate={{
                         scaleY: 1,
@@ -130,13 +132,15 @@ export function RevenueChart({ data }: { data: RevenuePoint[] }) {
             <strong>{active.month.replace("-", ".")}</strong>
             <span>신규 {won(active.newRevenue)}</span>
             <span>재등록 {won(active.renewedRevenue)}</span>
+            <span>필드 {won(active.fieldRevenue ?? 0)}</span>
+            <span>OT {won(active.otRevenue ?? 0)}</span>
           </>
         ) : (
           "선택 기간에 매출 기록이 없습니다."
         )}
       </div>
       <div className="chart-footer">
-        <span>환불은 매출에서 분리 표시 · 추가/유형 미확인은 표에서 확인</span>
+        <span>PT 매출 기준 · 신규·재등록·필드·OT를 각각 분리</span>
         <button
           type="button"
           className="text-button"
@@ -150,13 +154,16 @@ export function RevenueChart({ data }: { data: RevenuePoint[] }) {
       {table && (
         <div className="table-scroll" tabIndex={0}>
           <table className="data-table">
-            <caption>기간별 등록 매출</caption>
+            <caption>기간별 PT 등록 매출</caption>
             <thead>
               <tr>
                 <th scope="col">기간</th>
                 <th scope="col">신규</th>
                 <th scope="col">재등록</th>
-                <th scope="col">추가·미확인</th>
+                <th scope="col">필드</th>
+                <th scope="col">OT</th>
+                <th scope="col">추가</th>
+                <th scope="col">미분류</th>
                 <th scope="col">환불</th>
               </tr>
             </thead>
@@ -166,7 +173,10 @@ export function RevenueChart({ data }: { data: RevenuePoint[] }) {
                   <th scope="row">{row.month}</th>
                   <td>{won(row.newRevenue)}</td>
                   <td>{won(row.renewedRevenue)}</td>
+                  <td>{won(row.fieldRevenue ?? 0)}</td>
+                  <td>{won(row.otRevenue ?? 0)}</td>
                   <td>{won(row.additionalRevenue)}</td>
+                  <td>{won(row.uncategorizedRevenue ?? 0)}</td>
                   <td>{won(row.refunds)}</td>
                 </tr>
               ))}

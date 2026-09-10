@@ -61,6 +61,9 @@ export type RevenuePoint = {
   newRevenue: number;
   renewedRevenue: number;
   additionalRevenue: number;
+  fieldRevenue?: number;
+  otRevenue?: number;
+  uncategorizedRevenue?: number;
   refunds: number;
 };
 export type MemberSummary = {
@@ -117,6 +120,9 @@ export type DashboardData = {
     newRevenue: number;
     renewedRevenue: number;
     additionalRevenue: number;
+    fieldRevenue: number;
+    otRevenue: number;
+    uncategorizedRevenue: number;
     strongestSessionBucket: string;
     strongestGoal: string;
     strongestAgeGroup: string;

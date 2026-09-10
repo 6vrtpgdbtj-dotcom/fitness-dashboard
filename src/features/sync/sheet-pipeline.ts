@@ -34,17 +34,48 @@ function exactField(domain: MappingDomain, value: unknown): string | null {
  */
 export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain, tabTitle = ""): unknown[][] {
   if (domain === "registration" && /^\d{2,4}\.\d{1,2}$/.test(tabTitle)) {
-    const headerIndex = rows.findIndex((row) => row.some((cell) => String(cell ?? "").trim() === "FC") && row.some((cell) => exactField("registration", cell) === "name") && row.some((cell) => exactField("registration", cell) === "payment_method"));
+    const headerIndex = rows.findIndex((row, rowIndex) => {
+      const names = row.filter((cell) => exactField("registration", cell) === "name").length;
+      const marked = rows.slice(Math.max(0, rowIndex - 3), rowIndex + 1).some((candidate) => candidate.some((cell) => /^(?:PT|FC)(?:\s*매출)?$/i.test(String(cell ?? "").trim())));
+      return names > 0 && (marked || (names === 1 && row.some((cell) => exactField("registration", cell) === "payment_method") && row.some((cell) => exactField("registration", cell) === "registration_type")));
+    });
     if (headerIndex >= 0) {
       const header = rows[headerIndex], month = tabTitle.split(".");
-      const name = header.findIndex((cell) => exactField("registration", cell) === "name"), payment = header.findIndex((cell) => exactField("registration", cell) === "payment_method"), type = header.findIndex((cell) => exactField("registration", cell) === "registration_type"), amount = payment - 1;
-      const year = Number(month[0]) < 100 ? 2000 + Number(month[0]) : Number(month[0]); let currentDate = "";
-      const output: unknown[][] = [["회원명", "결제 날짜", "매출", "RE/NEW", "결제방법", "상품", "결제상태"]];
-      for (const row of rows.slice(headerIndex + 1)) {
-        const rawDate = row.slice(0, name).find((cell) => typeof cell === "string" && /\d{1,2}월\s*\d{1,2}일/.test(cell));
-        if (typeof rawDate === "string") { const parts = rawDate.match(/(\d{1,2})월\s*(\d{1,2})일/)!; currentDate = `${year}-${parts[1].padStart(2,"0")}-${parts[2].padStart(2,"0")}`; }
-        const member = row[name], paid = row[amount];
-        if (currentDate && typeof member === "string" && member.trim() && paid != null && String(paid).trim()) output.push([member, currentDate, paid, row[type] ?? "", row[payment] ?? "", `FC ${String(row[name + 1] ?? "").trim() || "회원권"}`, "결제완료"]);
+      const year = Number(month[0]) < 100 ? 2000 + Number(month[0]) : Number(month[0]);
+      const markerRows = rows.slice(Math.max(0, headerIndex - 3), headerIndex + 1);
+      const detectedMarkers = markerRows.flatMap((row) => row.flatMap((cell, index) => {
+        const match = String(cell ?? "").trim().match(/^(PT|FC)(?:\s*매출)?$/i);
+        return match ? [{ kind: match[1].toUpperCase(), start: index }] : [];
+      }));
+      const markers = [...new Map(detectedMarkers.map((marker) => [marker.start, marker])).values()].sort((a, b) => a.start - b.start);
+      if (!markers.length) markers.push({ kind: header.some((cell) => exactField("registration", cell) === "trainer_name") ? "PT" : "FC", start: 0 });
+      const output: unknown[][] = [["회원명", "결제 날짜", "매출", "RE/NEW", "담당트레이너", "판매트레이너", "결제방법", "상품", "결제상태"]];
+      for (let sectionIndex = 0; sectionIndex < markers.length; sectionIndex++) {
+        const marker = markers[sectionIndex];
+        const end = markers[sectionIndex + 1]?.start ?? header.length;
+        const locate = (field: string) => header.findIndex((cell, index) => index >= marker.start && index < end && exactField("registration", cell) === field);
+        const name = locate("name");
+        if (name < 0) continue;
+        const payment = locate("payment_method");
+        const type = locate("registration_type");
+        const trainer = locate("trainer_name");
+        const salesTrainer = locate("sales_trainer_name");
+        const sessions = locate("registered_sessions");
+        const mappedAmount = locate("paid_amount");
+        const amount = mappedAmount >= 0 ? mappedAmount : payment > marker.start ? payment - 1 : -1;
+        const sectionHasOwnDates = rows.slice(headerIndex + 1).some((row) => row.slice(marker.start, end).some((cell) => typeof cell === "string" && /\d{1,2}월\s*\d{1,2}일/.test(cell)));
+        let currentDate = "";
+        for (const row of rows.slice(headerIndex + 1)) {
+          const sectionDate = row.slice(marker.start, end).find((cell) => typeof cell === "string" && /\d{1,2}월\s*\d{1,2}일/.test(cell));
+          const rawDate = sectionDate ?? (!sectionHasOwnDates ? row.find((cell) => typeof cell === "string" && /\d{1,2}월\s*\d{1,2}일/.test(cell)) : undefined);
+          if (typeof rawDate === "string") { const parts = rawDate.match(/(\d{1,2})월\s*(\d{1,2})일/)!; currentDate = `${year}-${parts[1].padStart(2,"0")}-${parts[2].padStart(2,"0")}`; }
+          const member = row[name], paid = amount >= 0 ? row[amount] : null;
+          if (!currentDate || typeof member !== "string" || !member.trim() || paid == null || !String(paid).trim()) continue;
+          const plan = marker.kind === "PT"
+            ? `${String(sessions >= 0 ? row[sessions] ?? "" : "").trim() || "회원권"}${sessions >= 0 && String(row[sessions] ?? "").trim() && !/회$/.test(String(row[sessions])) ? "회" : ""}`
+            : String(row[name + 1] ?? "").trim() || "회원권";
+          output.push([member, currentDate, paid, type >= 0 ? row[type] ?? "" : "", trainer >= 0 ? row[trainer] ?? "" : "", salesTrainer >= 0 ? row[salesTrainer] ?? "" : "", payment >= 0 ? row[payment] ?? "" : "", `${marker.kind} ${plan}`, "결제완료"]);
+        }
       }
       if (output.length > 1) return output;
     }
@@ -80,25 +111,6 @@ export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain, 
       }
     }
     return output;
-  }
-  if (domain === "registration") {
-    const month = tabTitle.match(/^(\d{2,4})\.(\d{1,2})$/);
-    const headerIndex = rows.findIndex((row) => row.some((cell) => exactField("registration", cell) === "name") && row.some((cell) => exactField("registration", cell) === "payment_method") && row.some((cell) => exactField("registration", cell) === "registration_type"));
-    if (month && headerIndex >= 0) {
-      const header = rows[headerIndex];
-      const name = header.findIndex((cell) => exactField("registration", cell) === "name"), payment = header.findIndex((cell) => exactField("registration", cell) === "payment_method"), type = header.findIndex((cell) => exactField("registration", cell) === "registration_type");
-      const amount = payment - 1;
-      let currentDate = "";
-      const year = Number(month[1]) < 100 ? 2000 + Number(month[1]) : Number(month[1]);
-      const output: unknown[][] = [["회원명", "결제 날짜", "매출", "RE/NEW", "결제방법", "상품", "결제상태"]];
-      for (const row of rows.slice(headerIndex + 1)) {
-        const rawDate = row.slice(0, name).find((cell) => typeof cell === "string" && /\d{1,2}월\s*\d{1,2}일/.test(cell));
-        if (typeof rawDate === "string") { const parts = rawDate.match(/(\d{1,2})월\s*(\d{1,2})일/)!; currentDate = `${year}-${parts[1].padStart(2,"0")}-${parts[2].padStart(2,"0")}`; }
-        const member = row[name], paid = row[amount];
-        if (currentDate && typeof member === "string" && member.trim() && paid !== null && paid !== undefined && String(paid).trim()) output.push([member, currentDate, paid, row[type] ?? "", row[payment] ?? "", `FC ${String(row[name + 1] ?? "").trim() || "회원권"}`, "결제완료"]);
-      }
-      if (output.length > 1) return output;
-    }
   }
   return rows;
 }

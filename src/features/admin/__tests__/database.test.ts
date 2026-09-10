@@ -110,6 +110,20 @@ it("does not grant access to an ambiguous mapped trainer", async () => {
   await db.query("insert into sync_record_state(organization_id,source_connection_id,source_tab_id,domain,source_record_key,record) values($1,$2,$3,'member','keep',$4)", [org, connection, tab, JSON.stringify({ hints: { trainer_name: "Coach" } })]);
   expect((await db.query("select trainer_id,record_status from members where id=$1", [member])).rows[0]).toEqual({ trainer_id: null, record_status: "review_required" });
 });
+it("keeps organization-level FC revenue valid in column trainer mode", async () => {
+  await call("admin_trainer", [{ action: "assign", connectionId: connection, mode: "column" }]);
+  await db.query("insert into registrations(organization_id,source_connection_id,source_tab_id,source_record_key,registration_date,paid_amount,status,product,record_status) values($1,$2,$3,'fc','2026-09-01',800000,'paid','FC 12개월','valid')", [org, connection, tab]);
+  await db.query("insert into sync_record_state(organization_id,source_connection_id,source_tab_id,domain,source_record_key,record) values($1,$2,$3,'registration','fc',$4)", [org, connection, tab, JSON.stringify({ record_status: "valid", values: { product: "FC 12개월" }, hints: {} })]);
+  expect((await db.query("select trainer_id,record_status from registrations where source_record_key='fc'")).rows[0]).toEqual({ trainer_id: null, record_status: "valid" });
+});
+it("assigns PT revenue to the sales trainer before the assigned trainer", async () => {
+  const salesTrainer = uid(30);
+  await db.query("insert into trainers(id,organization_id,display_name,email) values($1,$2,'Sales Coach','sales@example.com')", [salesTrainer, org]);
+  await call("admin_trainer", [{ action: "assign", connectionId: connection, mode: "column" }]);
+  await db.query("insert into registrations(organization_id,source_connection_id,source_tab_id,source_record_key,registration_date,paid_amount,status,product,record_status) values($1,$2,$3,'pt-sale','2026-09-01',777777,'paid','PT 20회','valid')", [org, connection, tab]);
+  await db.query("insert into sync_record_state(organization_id,source_connection_id,source_tab_id,domain,source_record_key,record) values($1,$2,$3,'registration','pt-sale',$4)", [org, connection, tab, JSON.stringify({ record_status: "valid", values: { product: "PT 20회" }, hints: { trainer_name: "Coach", sales_trainer_name: "Sales Coach" } })]);
+  expect((await db.query("select trainer_id,record_status from registrations where source_record_key='pt-sale'")).rows[0]).toEqual({ trainer_id: salesTrainer, record_status: "valid" });
+});
 it("requires review again when an approved record has no unambiguous trainer assignment", async () => {
   await review(member, { action: "approve", domain: "member" });
   await call("admin_trainer", [{ action: "assign", connectionId: connection, mode: "column" }]);

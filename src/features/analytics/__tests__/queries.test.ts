@@ -178,6 +178,33 @@ const rows: AnalyticsRows = {
 };
 
 describe("scoped operational analytics", () => {
+  it("accepts a multi-year custom period", () => {
+    expect(parsePeriod("2023-01-01", "2026-09-30")).toEqual({ start: "2023-01-01", end: "2026-09-30" });
+  });
+  it("separates each PT sale category for the team and each trainer", () => {
+    const categoryRows: AnalyticsRows = {
+      ...rows,
+      registrations: [
+        { ...registration, id: "new", trainer_id: "t1", registration_type: "new", paid_amount: 100000 },
+        { ...registration, id: "renewal", trainer_id: "t1", registration_type: "renewal", paid_amount: 200000 },
+        { ...registration, id: "field", trainer_id: "t1", registration_type: "field", paid_amount: 300000 },
+        { ...registration, id: "ot", trainer_id: "t2", registration_type: "ot", paid_amount: 400000 },
+        { ...registration, id: "unknown", trainer_id: "t2", registration_type: null, paid_amount: 500000 },
+        { ...registration, id: "fc", trainer_id: null, registration_type: "new", paid_amount: 600000, product: "FC 12개월" },
+        { ...registration, id: "fc-refund", trainer_id: null, registration_type: "new", paid_amount: 50000, product: "FC 12개월", status: "refunded" },
+      ],
+    };
+    const data = buildDashboardData(categoryRows, { id: "a", role: "admin", trainerId: null }, period, "2026-09-08");
+    expect(data.metrics.periodRevenue).toBe(1500000);
+    expect(data.metrics.fcRevenue).toBe(600000);
+    expect(data.metrics.refunds).toBe(0);
+    expect(data.revenue[0].refunds).toBe(0);
+    expect(data.revenue[0]).toMatchObject({ newRevenue: 100000, renewedRevenue: 200000, fieldRevenue: 300000, otRevenue: 400000, uncategorizedRevenue: 500000 });
+    expect(data.trainerComparison).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "t1", revenue: 600000, newRevenue: 100000, renewedRevenue: 200000, fieldRevenue: 300000, otRevenue: 0, uncategorizedRevenue: 0 }),
+      expect.objectContaining({ id: "t2", revenue: 900000, newRevenue: 0, renewedRevenue: 0, fieldRevenue: 0, otRevenue: 400000, uncategorizedRevenue: 500000 }),
+    ]));
+  });
   it("separates refunds and registration types, excluding pending and review records", () => {
     const data = buildDashboardData(
       rows,
@@ -202,6 +229,9 @@ describe("scoped operational analytics", () => {
         newRevenue: 400000,
         renewedRevenue: 200000,
         additionalRevenue: 0,
+        fieldRevenue: 0,
+        otRevenue: 0,
+        uncategorizedRevenue: 0,
         refunds: 50000,
       },
     ]);

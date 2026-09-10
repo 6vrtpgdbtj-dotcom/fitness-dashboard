@@ -25,8 +25,7 @@ export function parsePeriod(start: unknown, end: unknown): DateRange | null {
   if (
     !valid(start) ||
     !valid(end) ||
-    start > end ||
-    Date.parse(end) - Date.parse(start) > 366 * dayMs
+    start > end
   )
     return null;
   return { start, end };
@@ -106,6 +105,7 @@ export function buildDashboardData(
   const fcPaid = paid.filter((row) => row.product?.startsWith("FC "));
   const ptPaid = paid.filter((row) => !row.product?.startsWith("FC "));
   const refunded = registrations.filter((row) => row.status === "refunded");
+  const ptRefunded = refunded.filter((row) => !row.product?.startsWith("FC "));
   const consultations = rows.leads.filter(
     (row) =>
       within(row.consultation_date, period) &&
@@ -233,7 +233,7 @@ export function buildDashboardData(
     month <= period.end.slice(0, 7);
 
   ) {
-    const current = paid.filter((row) =>
+    const current = ptPaid.filter((row) =>
       row.registration_date?.startsWith(month),
     );
     revenue.push({
@@ -248,12 +248,15 @@ export function buildDashboardData(
       ),
       additionalRevenue: sum(
         current.filter(
-          (row) => !["new", "renewal"].includes(row.registration_type ?? ""),
+          (row) => row.registration_type === "additional",
         ),
         (row) => row.paid_amount,
       ),
+      fieldRevenue: sum(current.filter((row) => row.registration_type === "field"), (row) => row.paid_amount),
+      otRevenue: sum(current.filter((row) => row.registration_type === "ot"), (row) => row.paid_amount),
+      uncategorizedRevenue: sum(current.filter((row) => !["new", "renewal", "field", "ot", "additional"].includes(row.registration_type ?? "")), (row) => row.paid_amount),
       refunds: sum(
-        refunded.filter((row) => row.registration_date?.startsWith(month)),
+        ptRefunded.filter((row) => row.registration_date?.startsWith(month)),
         (row) => row.paid_amount,
       ),
     });
@@ -279,10 +282,10 @@ export function buildDashboardData(
         rows.registrations.filter((row) => row.status === "paid"),
         (row) => row.paid_amount,
       ),
-      refunds: sum(refunded, (row) => row.paid_amount),
-      newRegistrations: paid.filter((row) => row.registration_type === "new")
+      refunds: sum(ptRefunded, (row) => row.paid_amount),
+      newRegistrations: ptPaid.filter((row) => row.registration_type === "new")
         .length,
-      renewedRegistrations: paid.filter(
+      renewedRegistrations: ptPaid.filter(
         (row) => row.registration_type === "renewal",
       ).length,
       conversionRate: consultations.length
@@ -347,7 +350,10 @@ export function buildDashboardData(
             ),
             newRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && row.registration_type === "new"), (row) => row.paid_amount),
             renewedRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && row.registration_type === "renewal"), (row) => row.paid_amount),
-            additionalRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && !["new", "renewal"].includes(row.registration_type ?? "")), (row) => row.paid_amount),
+            additionalRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && row.registration_type === "additional"), (row) => row.paid_amount),
+            fieldRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && row.registration_type === "field"), (row) => row.paid_amount),
+            otRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && row.registration_type === "ot"), (row) => row.paid_amount),
+            uncategorizedRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && !["new", "renewal", "field", "ot", "additional"].includes(row.registration_type ?? "")), (row) => row.paid_amount),
             strongestSessionBucket: dominant(ptPaid.filter((row) => row.trainer_id === trainer.id).map((row) => sessionBucket(row.registered_sessions))),
             strongestGoal: dominant(rows.members.filter((row) => row.trainer_id === trainer.id).map((row) => row.exercise_goal)),
             strongestAgeGroup: dominant(rows.members.filter((row) => row.trainer_id === trainer.id).map((row) => ageBucket(row.birth_date, today))),
@@ -358,12 +364,12 @@ export function buildDashboardData(
               const years = first ? Math.max(1, Number(today.slice(0,4)) - Number(first.slice(0,4)) + 1) : 1;
               return { careerRevenue: total, monthlyAverageRevenue: total / months, yearlyAverageRevenue: total / years };
             })(),
-            newRegistrations: paid.filter(
+            newRegistrations: ptPaid.filter(
               (row) =>
                 row.trainer_id === trainer.id &&
                 row.registration_type === "new",
             ).length,
-            renewedRegistrations: paid.filter(
+            renewedRegistrations: ptPaid.filter(
               (row) =>
                 row.trainer_id === trainer.id &&
                 row.registration_type === "renewal",

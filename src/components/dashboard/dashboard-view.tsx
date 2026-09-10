@@ -53,7 +53,7 @@ export function DashboardView({
     const valid = parsePeriod(draft.start, draft.end);
     if (!valid) {
       setError(
-        "날짜를 확인하세요. 시작일 이후의 종료일, 최대 1년을 선택할 수 있습니다.",
+        "날짜를 확인하세요. 종료일은 시작일과 같거나 이후여야 합니다.",
       );
       return;
     }
@@ -255,7 +255,10 @@ export function DashboardView({
                       <th scope="col">PT 합계</th>
                       <th scope="col">신규 매출</th>
                       <th scope="col">재등록 매출</th>
-                      <th scope="col">기타·추가</th>
+                      <th scope="col">필드 매출</th>
+                      <th scope="col">OT 매출</th>
+                      <th scope="col">추가 매출</th>
+                      <th scope="col">미분류</th>
                       <th scope="col">신규 / 재등록 건수</th>
                       <th scope="col">진행 수업</th>
                       <th scope="col">담당 회원</th>
@@ -282,7 +285,10 @@ export function DashboardView({
                         </td>
                         <td>{won(row.newRevenue)}</td>
                         <td>{won(row.renewedRevenue)}</td>
+                        <td>{won(row.fieldRevenue)}</td>
+                        <td>{won(row.otRevenue)}</td>
                         <td>{won(row.additionalRevenue)}</td>
+                        <td>{won(row.uncategorizedRevenue)}</td>
                         <td>
                           {row.newRegistrations} / {row.renewedRegistrations}건
                         </td>
