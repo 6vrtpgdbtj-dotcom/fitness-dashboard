@@ -1,0 +1,63 @@
+name: Deploy static dashboard demo to GitHub Pages
+
+on:
+  push:
+    branches:
+      - codex/fitness-dashboard
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Render the sample-only dashboard
+        shell: bash
+        run: |
+          pnpm start > /tmp/fitness-dashboard.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent 'http://127.0.0.1:3000/demo?role=admin' --output /tmp/demo.html; then
+              break
+            fi
+            sleep 1
+          done
+          test -s /tmp/demo.html
+          mkdir -p pages/_next
+          cp -R .next/static pages/_next/static
+          sed 's|/_next/|/fitness-dashboard/_next/|g' /tmp/demo.html > pages/index.html
+          touch pages/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
