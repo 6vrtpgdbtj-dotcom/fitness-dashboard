@@ -102,7 +102,7 @@ export function DetailView({
                         hour12: false,
                       }).format(new Date(row.starts_at))
                     : "미정",
-                  member(row.member_id),
+                  member(row.member_id) === "회원 연결 미확인" && row.external_class_id?.startsWith("schedule|") ? decodeURIComponent(row.external_class_id.split("|")[1]) : member(row.member_id),
                   trainer(row.trainer_id),
                   row.deducted_sessions === null
                     ? "미확인"

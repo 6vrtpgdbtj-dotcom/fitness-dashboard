@@ -39,7 +39,7 @@ export function TodayClasses({
               </time>
               <span>
                 {members.find((member) => member.id === item.member_id)?.name ??
-                  "회원 연결 미확인"}
+                  (item.external_class_id?.startsWith("schedule|") ? decodeURIComponent(item.external_class_id.split("|")[1]) : "회원 연결 미확인")}
                 <small>
                   {members.find((member) => member.id === item.member_id)
                     ?.trainerName ?? "담당 미확인"}

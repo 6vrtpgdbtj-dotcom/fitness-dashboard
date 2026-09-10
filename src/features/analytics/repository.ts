@@ -10,7 +10,7 @@ const fields = {
   leads:
     "id,trainer_id,record_status,member_id,lead_date,consultation_date,status,is_registered,acquisition_source",
   classes:
-    "id,trainer_id,record_status,member_id,class_date,starts_at,status,deducted_sessions,remaining_sessions",
+    "id,trainer_id,record_status,member_id,external_class_id,class_date,starts_at,status,deducted_sessions,remaining_sessions",
   trainers: "id,display_name",
   connections: "id,display_name,status,last_successful_sync_at",
 };

@@ -33,6 +33,7 @@ export type LeadRow = RecordScope & {
   acquisition_source: string | null;
 };
 export type ClassRow = RecordScope & {
+  external_class_id?: string | null;
   member_id: string | null;
   class_date: string | null;
   starts_at: string | null;

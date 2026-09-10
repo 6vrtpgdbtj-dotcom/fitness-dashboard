@@ -114,7 +114,7 @@ export function extractScheduleGrid(rows: unknown[][], tabTitle: string, spreads
   const header = rows[0] ?? [];
   const trainers = header.flatMap((cell, columnIndex) => typeof cell === "string" && /^[가-힣]{2,6}$/.test(cell.trim()) ? [{ name: cell.trim(), columnIndex }] : []);
   if (!trainers.length) return rows;
-  const output: unknown[][] = [["회원명", "수업일", "수업시작시간", "담당트레이너", "잔여횟수", "수업상태"]];
+  const output: unknown[][] = [["회원명", "수업일", "수업시작시간", "담당트레이너", "잔여횟수", "수업상태", "수업ID"]];
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex++) {
     const row = rows[rowIndex] ?? [];
     const rawTime = row.slice(0, trainers[0].columnIndex).find((cell) => typeof cell === "string" && /^\d{1,2}:\d{2}$/.test(cell.trim()));
@@ -128,7 +128,7 @@ export function extractScheduleGrid(rows: unknown[][], tabTitle: string, spreads
         const match = cell.normalize("NFKC").trim().match(/^([가-힣]{2,6})(?:\s*(\d{1,3})\s*\/\s*(\d{1,3}))?$/);
         if (!match || nonAppointments.has(match[1])) continue;
         const remaining = match[2] && match[3] ? Math.max(0, Number(match[3]) - Number(match[2])) : "";
-        output.push([match[1], date, time, trainer.name, remaining, date === today ? "완료" : ""]);
+        output.push([match[1], date, time, trainer.name, remaining, date === today ? "완료" : "", `schedule|${encodeURIComponent(match[1])}|${date}|${time}|${encodeURIComponent(trainer.name)}`]);
       }
     });
   }
