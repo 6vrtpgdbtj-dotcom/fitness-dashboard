@@ -128,7 +128,7 @@ export function extractScheduleGrid(rows: unknown[][], tabTitle: string, spreads
         const match = cell.normalize("NFKC").trim().match(/^([가-힣]{2,6})(?:\s*(\d{1,3})\s*\/\s*(\d{1,3}))?$/);
         if (!match || nonAppointments.has(match[1])) continue;
         const remaining = match[2] && match[3] ? Math.max(0, Number(match[3]) - Number(match[2])) : "";
-        output.push([match[1], date, time, trainer.name, remaining, date === today ? "완료" : "", `schedule|${encodeURIComponent(match[1])}|${date}|${time}|${encodeURIComponent(trainer.name)}`]);
+        output.push([match[1], date, time, trainer.name, remaining, date <= today ? "완료" : "", `schedule|${encodeURIComponent(match[1])}|${date}|${time}|${encodeURIComponent(trainer.name)}`]);
       }
     });
   }
