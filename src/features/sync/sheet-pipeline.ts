@@ -36,18 +36,23 @@ export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain, 
   if (domain === "registration" && /^\d{2,4}\.\d{1,2}$/.test(tabTitle)) {
     const headerIndex = rows.findIndex((row, rowIndex) => {
       const names = row.filter((cell) => exactField("registration", cell) === "name").length;
-      const marked = rows.slice(Math.max(0, rowIndex - 3), rowIndex + 1).some((candidate) => candidate.some((cell) => /^(?:PT|FC)(?:\s*매출)?$/i.test(String(cell ?? "").trim())));
+      const marked = rows.slice(0, rowIndex + 1).some((candidate) => candidate.some((cell) => /^(?:PT|FC)(?:\s*매출)?$/i.test(String(cell ?? "").trim())));
       return names > 0 && (marked || (names === 1 && row.some((cell) => exactField("registration", cell) === "payment_method") && row.some((cell) => exactField("registration", cell) === "registration_type")));
     });
     if (headerIndex >= 0) {
       const header = rows[headerIndex], month = tabTitle.split(".");
       const year = Number(month[0]) < 100 ? 2000 + Number(month[0]) : Number(month[0]);
-      const markerRows = rows.slice(Math.max(0, headerIndex - 3), headerIndex + 1);
+      const markerRows = rows.slice(0, headerIndex + 1);
       const detectedMarkers = markerRows.flatMap((row) => row.flatMap((cell, index) => {
         const match = String(cell ?? "").trim().match(/^(PT|FC)(?:\s*매출)?$/i);
         return match ? [{ kind: match[1].toUpperCase(), start: index }] : [];
       }));
-      const markers = [...new Map(detectedMarkers.map((marker) => [marker.start, marker])).values()].sort((a, b) => a.start - b.start);
+      let markers = [...new Map(detectedMarkers.map((marker) => [marker.start, marker])).values()].sort((a, b) => a.start - b.start);
+      const nameAnchors = header.flatMap((cell, index) => exactField("registration", cell) === "name" ? [index] : []);
+      const markersShareHeader = header.some((cell) => /^(?:PT|FC)(?:\s*매출)?$/i.test(String(cell ?? "").trim()));
+      if (!markersShareHeader && markers.length >= 2 && nameAnchors.length >= markers.length) {
+        markers = markers.map((marker, index) => ({ ...marker, start: nameAnchors[index] }));
+      }
       if (!markers.length) markers.push({ kind: header.some((cell) => exactField("registration", cell) === "trainer_name") ? "PT" : "FC", start: 0 });
       const output: unknown[][] = [["회원명", "결제 날짜", "매출", "RE/NEW", "담당트레이너", "판매트레이너", "결제방법", "상품", "결제상태"]];
       for (let sectionIndex = 0; sectionIndex < markers.length; sectionIndex++) {
