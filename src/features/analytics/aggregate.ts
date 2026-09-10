@@ -262,6 +262,10 @@ export function buildDashboardData(
       .toISOString()
       .slice(0, 7);
   }
+  const baseRenewals = activeMembers.filter((row) => (row.remainingSessions !== null && row.remainingSessions <= 5) || (row.expectedDepletionDate !== null && row.expectedDepletionDate <= addDays(today, 14)));
+  const scheduleRenewals = rows.classes.filter((row) => row.status === "completed" && row.remaining_sessions !== null && row.remaining_sessions <= 5 && row.external_class_id?.startsWith("schedule|")).map((row) => ({ id: row.id, name: decodeURIComponent(row.external_class_id!.split("|")[1]), trainerId: row.trainer_id, trainerName: trainerName(row.trainer_id), status: "active", remainingSessions: Number(row.remaining_sessions), expectedDepletionDate: null, estimateBasis: null, lastClassDate: row.class_date } satisfies MemberSummary));
+  const renewalMap = new Map<string, MemberSummary>();
+  [...baseRenewals, ...scheduleRenewals].sort((a,b) => (b.lastClassDate ?? "").localeCompare(a.lastClassDate ?? "")).forEach((row) => { const key = `${row.trainerId}:${row.name.normalize("NFKC").trim()}`; if (!renewalMap.has(key)) renewalMap.set(key,row); });
   return {
     role: scope.role,
     period,
@@ -320,13 +324,7 @@ export function buildDashboardData(
       };
     }),
     members,
-    renewals: activeMembers
-      .filter(
-        (row) =>
-          (row.remainingSessions !== null && row.remainingSessions <= 5) ||
-          (row.expectedDepletionDate !== null &&
-            row.expectedDepletionDate <= addDays(today, 14)),
-      )
+    renewals: [...renewalMap.values()]
       .sort(
         (a, b) =>
           (a.remainingSessions ?? Infinity) - (b.remainingSessions ?? Infinity),
