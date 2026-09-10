@@ -12,7 +12,7 @@ export type MemberRow = RecordScope & {
   latest_registration_date: string | null;
   updated_at: string | null;
   birth_date?: string | null;
-  goal?: string | null;
+  exercise_goal?: string | null;
 };
 export type RegistrationRow = RecordScope & {
   member_id: string | null;

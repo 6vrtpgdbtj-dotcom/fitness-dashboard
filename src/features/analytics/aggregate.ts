@@ -345,7 +345,7 @@ export function buildDashboardData(
             renewedRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && row.registration_type === "renewal"), (row) => row.paid_amount),
             additionalRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && !["new", "renewal"].includes(row.registration_type ?? "")), (row) => row.paid_amount),
             strongestSessionBucket: dominant(ptPaid.filter((row) => row.trainer_id === trainer.id).map((row) => sessionBucket(row.registered_sessions))),
-            strongestGoal: dominant(rows.members.filter((row) => row.trainer_id === trainer.id).map((row) => row.goal)),
+            strongestGoal: dominant(rows.members.filter((row) => row.trainer_id === trainer.id).map((row) => row.exercise_goal)),
             strongestAgeGroup: dominant(rows.members.filter((row) => row.trainer_id === trainer.id).map((row) => ageBucket(row.birth_date, today))),
             ...(() => {
               const career = rows.registrations.filter((row) => row.status === "paid" && row.trainer_id === trainer.id && !row.product?.startsWith("FC ") && row.registration_date);
