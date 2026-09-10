@@ -198,10 +198,10 @@ CLI가 없거나 인증되지 않았다면 설치된 Vercel deploy 스킬의 `sc
 구성되지 않았습니다. Preview URL과 별도 claim URL은 배포 결과에서만 기록합니다.
 Claim URL은 배포 관리 권한을 넘기는 링크이므로 공개 README에 게시하지 않습니다.
 
-`vercel.json`은 `/api/cron/reconcile-sheets`에 `*/5 * * * *`를 등록합니다.
-Vercel Hobby는 하루 한 번 cron만 지원하며 더 잦은 표현식은 배포에서 거부될 수 있습니다.
-5분 cron을 지원하는 기존 요금제 또는 운영자가 승인한 별도 스케줄러가 필요합니다.
-주기를 하루로 낮춘 상태를 5분 재조정 요구 충족으로 처리하지 않습니다.
+`vercel.json`은 Hobby 호환 복구 작업으로 `/api/cron/reconcile-sheets`를 매일 03:00 UTC에
+등록합니다. 실시간 갱신은 Google Drive notification이 담당하며, cron은 notification 누락이나
+만료된 watch를 하루 한 번 복구합니다. 5분 단위 복구가 필요해지면 Pro 또는 운영자가 승인한
+별도 스케줄러로 전환하고, 전환 전까지 하루 1회 cron을 5분 보장으로 표현하지 않습니다.
 [Vercel cron 제한](https://vercel.com/docs/cron-jobs/usage-and-pricing).
 
 운영 배포 권한과 인수 조건이 충족된 경우에만, 운영자가 Production 변수와 canonical 도메인을
@@ -266,7 +266,7 @@ order by created_at desc limit 100;
 cursor 전진, notification job의 성공, 자동 dashboard 새로고침을 확인합니다. Vercel function
 logs에서 callback 오류 유무, 알림 204, cron 200과 실행 주기를 확인하되 요청 Cookie,
 Authorization, Google channel token이나 OAuth code/query string은 증거에 저장하지 않습니다.
-5분 cron 두 번 이상과 watch 갱신 구간의 성공을 기록합니다. 처리량이 커지면 300초 function
+Drive notification 두 번 이상과 하루 1회 복구 cron, watch 갱신 구간의 성공을 기록합니다. 처리량이 커지면 60초 Hobby function
 한도 내에서 모든 후보가 완료되는지 별도 부하 검증이 필요합니다.
 
 ## 7. 실환경 인수: 세 시트, 권한 격리, 원본 미수정
@@ -374,6 +374,6 @@ RLS 실제 SQL 결과, bootstrap 감사 번호, 세 시트별 검사 결과, 트
    불가능하므로 백업을 보존하고 관리자 재동의 여부를 결정합니다. 노출된 service-role/
    OAuth/cron 자격 증명은 제공자에서 회수/교체하고 관련 세션 만료를 검증합니다.
 5. 문제 연결을 재연결하고 인증된 reconciliation으로 import/watch를 복구합니다. cron을
-   재개한 뒤 5분 주기, 최근 성공 시각, 타인 데이터 차단과 원본 미수정을 재검증합니다.
+   재개한 뒤 하루 1회 복구 주기, 최근 성공 시각, 타인 데이터 차단과 원본 미수정을 재검증합니다.
 
 참고: [Vercel Instant Rollback](https://vercel.com/docs/instant-rollback).

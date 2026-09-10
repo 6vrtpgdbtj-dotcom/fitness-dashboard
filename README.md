@@ -46,4 +46,5 @@ pnpm exec playwright test
 
 운영 자격 증명이 없는 Vercel URL은 UI/데모 미리보기입니다. 이 저장소의 배포 문서와
 로컬 테스트만으로 Supabase 운영 구성, Google 동의, 실시간 동기화 또는 운영 준비 완료를
-선언하지 않습니다. `vercel.json`의 5분 cron을 지원하는 계정/스케줄러도 필요합니다.
+선언하지 않습니다. Hobby 배포에서는 Google Drive 알림이 실시간 갱신을 담당하고,
+`vercel.json`의 하루 1회 cron은 알림 누락 복구용으로만 동작합니다.
