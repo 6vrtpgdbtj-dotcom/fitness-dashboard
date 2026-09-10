@@ -25,6 +25,7 @@ it("recovers an undiscovered single-column header and blocks stale preview respo
   let complete!: (value: ReturnType<typeof mapColumns>) => void;
   mocks.preview.mockImplementationOnce(() => new Promise(resolve => { complete=resolve; })).mockResolvedValueOnce(mapColumns({...single,headerRowIndex:1}));
   render(<MappingWorkspace tabs={[{id:"tab",source_connection_id:"connection",title:"원본",domain:null,mappingResult:mapColumns(single)}]} />);
+  expect(screen.getByRole("option", { name: "원본 · 분류 미확정" })).toBeInTheDocument();
   expect(screen.queryByRole("button",{name:"새 매핑 버전 저장"})).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button",{name:"선택한 행 미리보기"}));
   fireEvent.change(screen.getByLabelText("헤더 행"),{target:{value:"2"}});

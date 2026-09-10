@@ -1,4 +1,4 @@
-import type { AuditEvent, StoredRecord, SyncRepository, SyncScope } from "./types";
+import type { AuditEvent, CommitOutcome, StoredRecord, SyncRepository, SyncScope } from "./types";
 export type RpcClient = { rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: { message: string } | null }> };
 export async function rpc<T>(client: RpcClient, name: string, args: Record<string, unknown>): Promise<T> {
   const { data, error } = await client.rpc(name, args);
@@ -13,7 +13,7 @@ export function createRpcSyncRepository(client: RpcClient, lease: string): SyncR
     insertSnapshot(snapshot) {
       return rpc<string>(client, "sync_insert_snapshot", { ...scopeArgs(snapshot.scope), p_snapshot_key: snapshot.snapshotKey, p_captured_at: snapshot.capturedAt, p_payload: snapshot.sourcePayload });
     },
-    async transaction(scope, operation) {
+    async transaction(scope, operation, afterCommit) {
       const records = await rpc<StoredRecord[]>(client, "sync_read_records", { ...scopeArgs(scope), p_lease: lease });
       const current = new Map(records.map((record) => [`${record.domain}:${record.source_record_key}`, record]));
       const writes: StoredRecord[] = []; const audits: AuditEvent[] = [];
@@ -22,8 +22,8 @@ export function createRpcSyncRepository(client: RpcClient, lease: string): SyncR
         async upsert(record) { const copy = structuredClone(record); writes.push(copy); current.set(`${copy.domain}:${copy.source_record_key}`, copy); },
         async appendAudit(event) { audits.push(structuredClone(event)); },
       });
-      await rpc(client, "sync_commit_records", { ...scopeArgs(scope), p_lease: lease, p_records: writes, p_audits: audits });
-      return result;
+      const outcomes = await rpc<CommitOutcome[] | null>(client, "sync_commit_records", { ...scopeArgs(scope), p_lease: lease, p_records: writes, p_audits: audits });
+      return afterCommit && Array.isArray(outcomes) ? afterCommit(result, outcomes) : result;
     },
   };
 }

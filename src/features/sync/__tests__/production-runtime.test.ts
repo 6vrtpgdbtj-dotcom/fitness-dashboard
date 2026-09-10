@@ -14,6 +14,37 @@ vi.mock("googleapis", () => ({ google: { sheets: () => ({ spreadsheets: {
 afterEach(() => { vi.unstubAllEnvs(); });
 
 describe("production ingestion", () => {
+  it("retains a redacted unknown-tab snapshot and ingests the tab after mapping confirmation", async () => {
+    boundary.rows = [["별명", "기록"], ["민수", "연락 010-1234-5678"]];
+    let confirmed = false;
+    const snapshots: unknown[] = [], writes: StoredRecord[] = [];
+    const version = { id: "version", version: 1, confirmed_by: "admin", mapping_fingerprint: "old", columns: { domain: "member", headerRowIndex: 0, fields: [{ sourceHeader: "별명", field: "name" }, { sourceHeader: "기록", field: "notes" }] } };
+    boundary.database = {
+      from(table: string) {
+        const data = table === "sheet_connections" ? { id: "conn", organization_id: "org", spreadsheet_id: "sheet", is_active: true, trainer_id: null }
+          : table === "sheet_tabs" ? { id: "tab", domain: null, is_active: true } : confirmed ? [version] : [];
+        const query = { select: () => query, eq: () => query, order: () => query, limit: () => query, insert: () => query,
+          maybeSingle: async () => ({ data: Array.isArray(data) ? data[0] : data, error: null }),
+          single: async () => ({ data: version, error: null }),
+          then(resolve: (value: unknown) => unknown) { return Promise.resolve({ data, error: null }).then(resolve); },
+        }; return query;
+      },
+      async rpc(name: string, args: Record<string, unknown>) {
+        if (name === "sync_acquire") return { data: "lease", error: null };
+        if (name === "sync_upsert_tab") return { data: { id: "tab", domain: confirmed ? "member" : null, is_active: true }, error: null };
+        if (name === "sync_insert_snapshot") { snapshots.push(args.p_payload); return { data: "snapshot", error: null }; }
+        if (name === "sync_read_records") return { data: [], error: null };
+        if (name === "sync_commit_records") writes.push(...args.p_records as StoredRecord[]);
+        return { data: null, error: null };
+      },
+    };
+    await getSyncService().runSheetSync("conn", "manual");
+    expect(snapshots).toEqual([{ rows: [["별명", "기록"], ["민수", "연락 [전화번호 삭제]"]] }]);
+    expect(writes).toEqual([]);
+    confirmed = true;
+    await getSyncService().runSheetSync("conn", "manual");
+    expect(writes).toMatchObject([{ record_status: "valid", values: { name: "민수", notes: "연락 [전화번호 삭제]" }, source_tab_id: "tab" }]);
+  });
   it.each(["canonical", "legacy", "both"])("registers watches using %s notification secret configuration", async (mode) => {
     vi.stubEnv("GOOGLE_NOTIFICATION_SECRET", mode === "legacy" ? undefined : "canonical-notification-secret-at-least-32-characters");
     vi.stubEnv("GOOGLE_WATCH_SECRET", mode === "canonical" ? undefined : mode === "both" ? "short-invalid-legacy" : "legacy-notification-secret-at-least-32-characters");

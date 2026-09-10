@@ -5,8 +5,14 @@ import { useAdminMutation } from "./use-admin-mutation";
 import { ConfirmationDialog } from "./confirmation-dialog";
 export function ConnectionControls({ connection }: { connection: Pick<AdminConnection,"id" | "display_name" | "is_active"> }) {
   const state = useAdminMutation();
+  const [syncing, setSyncing] = useState(false);
   const [confirm, setConfirm] = useState<"disconnect" | "delete_history" | null>(null);
   return <div><div className="connection-controls">
+    {connection.is_active && <button className="quiet-button" disabled={state.busy} onClick={async () => {
+      setSyncing(true);
+      try { await state.mutate(`/api/sheets/${connection.id}/sync`, {}, "동기화를 완료했습니다."); }
+      finally { setSyncing(false); }
+    }}>{syncing ? "동기화 중…" : "지금 동기화"}</button>}
     {connection.is_active ? <button className="danger-button" disabled={state.busy} onClick={() => setConfirm("disconnect")}>연결 해제</button> : <button className="danger-button" disabled={state.busy} onClick={() => setConfirm("delete_history")}>원본 이력 삭제</button>}
   </div>{state.error && <p role="alert" className="form-error">{state.error}</p>}{state.message && <p role="status">{state.message}</p>}
     {confirm && <ConfirmationDialog title={`${connection.display_name} · ${confirm === "disconnect" ? "연결 해제" : "원본 이력 삭제"}`} confirmLabel={confirm === "disconnect" ? "연결 해제 확인" : "영구 삭제"} phrase={confirm === "delete_history" ? "DELETE HISTORY" : undefined} busy={state.busy} onCancel={() => setConfirm(null)} onConfirm={async () => { if (await state.mutate(`/api/review/${connection.id}`, confirm === "disconnect" ? { action: confirm } : { action: confirm, confirmation: "DELETE HISTORY" })) setConfirm(null); }}>

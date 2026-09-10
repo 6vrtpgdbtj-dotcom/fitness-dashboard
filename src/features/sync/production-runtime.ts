@@ -4,12 +4,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthorizedGoogleClient } from "@/lib/google/oauth";
 import { createSyncService, type Connection, type Watch, type SyncDependencies } from "./orchestration";
 import { createRpcSyncRepository, rpc } from "./supabase-repository";
-import { applySync } from "./apply-sync";
+import { applySync, redactSourceRows } from "./apply-sync";
 import { mapColumns } from "../mapping/map-columns";
 import { discoverDomain } from "./sheet-pipeline";
 import type { ConfirmedMapping, MappingDomain } from "../mapping/types";
 import type { SyncResult } from "./types";
-import { stableJson } from "./fingerprint";
+import { fingerprint, stableJson } from "./fingerprint";
 
 function checked<T>({ data, error }: { data: T; error: { message: string } | null }): T {
   if (error) throw Object.assign(new Error("Sync storage operation failed."), { code: "storage_failed" });
@@ -51,6 +51,15 @@ export function getSyncService() {
         // The fenced RPC resolves the latest scoped administrator-confirmed
         // domain before an ambiguous tab can be skipped.
         if (stored.is_active && stored.domain) prepared.push({ tab, rows, domain: stored.domain, tabId: stored.id });
+        else if (stored.is_active) {
+          // A domain decision can be made only after the administrator sees
+          // the source. Keep the same immutable, redacted snapshot contract.
+          const redacted = redactSourceRows(rows);
+          await createRpcSyncRepository(db, lease).insertSnapshot({
+            scope: { organizationId: connection.organizationId, sourceConnectionId: connection.id, sourceTabId: stored.id },
+            snapshotKey: fingerprint(redacted), capturedAt: new Date().toISOString(), sourcePayload: { rows: redacted },
+          });
+        }
       }
       prepared.sort((a, b) => Number(b.domain === "member") - Number(a.domain === "member"));
       for (const { tab, rows, domain, tabId } of prepared) {

@@ -5,6 +5,7 @@ import { normalizeMember } from "../normalize-member";
 import { normalizeRegistration } from "../normalize-registration";
 import { normalizeLead } from "../normalize-lead";
 import { normalizeClass } from "../normalize-class";
+import { mapColumns } from "../../mapping/map-columns";
 import type { AuditEvent, RawSnapshot, StoredRecord, SyncInput, SyncRepository, SyncScope } from "../types";
 import type { MappingDomain } from "../../mapping/types";
 
@@ -53,6 +54,32 @@ function input(rows: unknown[][], domain: MappingDomain = "registration", fields
 }
 
 describe("sync persistence", () => {
+  it.each(["2026년 9월 5일", "2026. 9. 5.", "2026/9/5"])("ingests supported date %s through automatic mapping", async (date) => {
+    const db = database();
+    const sheet = input([["R1", "민수", date, 600000]]);
+    sheet.mapping = mapColumns({ ...sheet, domain: "registration", tabTitle: "등록" });
+    expect(sheet.mapping.fields[2].field).toBe("registration_date");
+    expect((await applySync(sheet, db.db)).registration.inserted).toBe(1);
+    expect(db.records()[0].values.registration_date).toBe("2026-09-05");
+  });
+
+  it("keeps valid revenue with an invalid optional end date and retains a warning", async () => {
+    const db = database();
+    const fields = ["external_registration_id", "name", "registration_date", "paid_amount", "expected_end_date"];
+    const result = await applySync(input([["R1", "민수", "2026-09-05", 600000, "미정"]], "registration", fields), db.db);
+    expect(result.registration).toMatchObject({ inserted: 1, reviewRequired: 0 });
+    expect(db.records()[0]).toMatchObject({ record_status: "valid", values: { paid_amount: 600000, expected_end_date: null } });
+    expect(db.records()[0].issues).toContainEqual(expect.objectContaining({ field: "expected_end_date", code: "invalid_date", severity: "warning" }));
+    expect(db.audits()[0].issues).toEqual(db.records()[0].issues);
+  });
+
+  it.each([
+    { domain: "registration" as const, fields: ["name", "registration_date", "paid_amount", "status"], row: ["민수", "2026-09-05", 600000, "정체불명"] },
+    { domain: "member" as const, fields: ["name", "birth_date"], row: ["민수", "invalid"] },
+  ])("keeps $domain business and identity blockers quarantined", async ({ domain, fields, row }) => {
+    const db = database();
+    expect((await applySync(input([row], domain, fields), db.db))[domain].reviewRequired).toBe(1);
+  });
   it("does not insert duplicates when a snapshot is repeated or rows are sorted", async () => {
     const db = database();
     const rows = [["R1", "민수", "2026-09-01", "₩600,000"], ["R2", "서연", "2026-09-02", "900,000원"]];

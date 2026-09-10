@@ -1,6 +1,7 @@
 "use client";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { SignOutButton } from "./sign-out-button";
 import {
   LayoutDashboard,
   Users,
@@ -10,7 +11,6 @@ import {
   Database,
   ScanLine,
   UserCog,
-  ArrowUpRight,
 } from "lucide-react";
 
 export type AppRole = "admin" | "trainer";
@@ -130,7 +130,7 @@ export function AppShell({
               {displayName.slice(0, 1)}
             </span>
             <span>{displayName}</span>
-            <ArrowUpRight size={14} aria-hidden="true" />
+            {!sample && <SignOutButton />}
           </div>
         </header>
         {role === "admin" && <nav className="mobile-admin-nav" aria-label="모바일 운영 설정"><a href="/settings/sheets">시트</a><a href="/settings/data-review">데이터 점검</a><a href="/settings/users">사용자 관리</a></nav>}

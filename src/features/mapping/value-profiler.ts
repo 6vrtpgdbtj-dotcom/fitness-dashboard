@@ -1,23 +1,16 @@
 import type { ColumnProfile, ValueKind } from "./types";
+import { parseDate } from "@/lib/dates/parse-sheet-date";
 
 const statuses = new Set(["상담완료", "상담예정", "미등록", "등록", "등록완료", "신규", "재등록", "완료", "예정", "진행중", "활성", "종료", "휴면", "중단", "취소", "환불", "결석", "출석", "노쇼", "이용중", "true", "false", "yes", "no", "y", "n"]);
 export function isNonEmpty(value: unknown): boolean {
   return value !== null && value !== undefined && !(typeof value === "string" && value.trim() === "");
 }
 
-function isDate(value: string): boolean {
-  const match = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/.exec(value);
-  if (!match) return false;
-  const [, year, month, day] = match.map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
-}
-
 function classify(value: unknown): ValueKind {
   if (value instanceof Date && Number.isFinite(value.getTime())) return "date";
   if (typeof value === "number" && Number.isFinite(value)) return Number.isInteger(value) ? "integer" : "money";
   const text = String(value).normalize("NFKC").trim();
-  if (isDate(text)) return "date";
+  if (parseDate(text)) return "date";
   if (statuses.has(text.toLowerCase().replace(/\s/g, ""))) return "status";
   if (/^[+-]?\d+(?:\.\d+)?\s*%$/.test(text)) return "percentage";
   if (/^0\d+$/.test(text) || /^(?:[a-z]+[-_]?\d+[\w-]*|\d{2,4}-\d{3,4}-\d{4})$/i.test(text)) return "identifier";

@@ -1,4 +1,6 @@
 import { canonicalFields } from "../mapping/canonical-fields";
+import { parseDate } from "@/lib/dates/parse-sheet-date";
+export { parseDate } from "@/lib/dates/parse-sheet-date";
 import type { MappingDomain } from "../mapping/types";
 import type { CanonicalRow, FieldIssue, NormalizedRow, NormalizedValues } from "./types";
 
@@ -46,14 +48,6 @@ function text(value: unknown): string | null {
   const result = String(value).normalize("NFKC").trim();
   return result || null;
 }
-export function parseDate(value: string): string | null {
-  const match = value.match(/^(\d{4})\s*(?:[-./]|년)\s*(\d{1,2})\s*(?:[-./]|월)\s*(\d{1,2})\s*(?:일|\.)?$/);
-  if (!match) return null;
-  const [, y, m, d] = match;
-  const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
-  if (date.getUTCFullYear() !== Number(y) || date.getUTCMonth() + 1 !== Number(m) || date.getUTCDate() !== Number(d)) return null;
-  return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-}
 function parseNumber(value: string): number | null {
   const clean = value.replace(/^(?:₩|￦|\$|KRW)\s*/i, "").replace(/\s*(?:원|KRW)$/i, "").trim();
   if (!/^-?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(clean)) return null;
@@ -70,12 +64,15 @@ const categories: Record<string, string> = { 신규: "new", 첫등록: "new", ne
 const dates = new Set(["birth_date", "first_consultation_date", "first_registration_date", "latest_registration_date", "expected_end_date", "registration_date", "lead_date", "consultation_date", "class_date"]);
 const numeric = new Set(["remaining_sessions", "total_registered_sessions", "total_paid_amount", "registered_sessions", "list_amount", "paid_amount", "price_per_session", "discount_amount", "deducted_sessions"]);
 const hintFields = new Set(["name", "external_member_id", "trainer_name", "sales_trainer_name"]);
+// Only supplementary fields may be discarded without losing business identity,
+// the paid amount/date, attendance, conversion, or trainer authorization.
+const warningFields = new Set(["expected_end_date", "first_consultation_date", "first_registration_date", "latest_registration_date", "list_amount", "price_per_session", "discount_amount"]);
 
 export function normalizeFields(domain: MappingDomain, row: CanonicalRow): NormalizedRow {
   const values: NormalizedValues = {};
   const hints: NormalizedRow["hints"] = {};
   const issues: FieldIssue[] = [];
-  const issue = (field: string, code: string) => issues.push({ field, code, message: `${field}: ${code}` });
+  const issue = (field: string, code: string) => issues.push({ field, code, message: `${field}: ${code}`, ...(warningFields.has(field) ? { severity: "warning" as const } : {}) });
   for (const { id } of canonicalFields[domain]) {
     if (!(id in row)) continue;
     const original = text(row[id]);

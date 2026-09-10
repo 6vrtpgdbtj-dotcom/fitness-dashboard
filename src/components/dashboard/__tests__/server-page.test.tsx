@@ -2,6 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { buildDashboardData } from "@/features/analytics/aggregate";
 import { ServerDashboardPage } from "../server-page";
+vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard", useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }) }));
 const boundary = vi.hoisted(() => ({
   scope: {
     id: "verified-user",

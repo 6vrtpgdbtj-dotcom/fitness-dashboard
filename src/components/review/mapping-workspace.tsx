@@ -7,7 +7,7 @@ import { previewMapping } from "@/features/admin/preview-mapping";
 export function MappingWorkspace({ tabs }: { tabs: AdminTab[] }) {
   const [id,setId] = useState(tabs[0]?.id ?? "");
   const tab = tabs.find(t => t.id === id);
-  return <section className="admin-section"><div className="admin-section-heading"><div><p className="eyebrow">SOURCE MAPPING</p><h2>원본 열 매핑</h2></div><label className="admin-field">원본 탭<select value={id} onChange={e => setId(e.target.value)}><option value="">탭 선택</option>{tabs.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select></label></div>{tab ? <TabMapping key={tab.id} tab={tab} /> : <p className="admin-empty">점검할 원본 탭이 없습니다.</p>}</section>;
+  return <section className="admin-section"><div className="admin-section-heading"><div><p className="eyebrow">SOURCE MAPPING</p><h2>원본 열 매핑</h2></div><label className="admin-field">원본 탭<select value={id} onChange={e => setId(e.target.value)}><option value="">탭 선택</option>{tabs.map(t => <option key={t.id} value={t.id}>{t.title}{t.domain === null ? " · 분류 미확정" : ""}</option>)}</select></label></div>{tab ? <TabMapping key={tab.id} tab={tab} /> : <p className="admin-empty">점검할 원본 탭이 없습니다.</p>}</section>;
 }
 function TabMapping({ tab }: { tab: AdminTab }) {
   const [domain,setDomain] = useState<MappingDomain>(tab.domain ?? tab.mappingResult.domain);

@@ -3,7 +3,7 @@ import type { MappingDomain, MappingResult, MappingScope } from "../mapping/type
 export type SyncScope = MappingScope;
 export type CanonicalRow = Record<string, unknown>;
 export type NormalizedValues = Record<string, string | number | boolean | null>;
-export type FieldIssue = { field: string; code: string; message: string };
+export type FieldIssue = { field: string; code: string; message: string; severity?: "warning" };
 export type NormalizedRow = {
   values: NormalizedValues;
   /** Join hints are not columns on registrations/leads/classes. Never spread them into inserts. */
@@ -66,5 +66,7 @@ export type SyncRepository = {
   insertSnapshot(snapshot: Omit<RawSnapshot, "id">): Promise<string>;
   /** Atomic records + audits; serialize concurrent syncs for this scope (lock or retry
    * serializable transactions). Do not emulate this with sequential Supabase REST writes. */
-  transaction<T>(scope: SyncScope, operation: (tx: SyncTransaction) => Promise<T>): Promise<T>;
+  transaction<T>(scope: SyncScope, operation: (tx: SyncTransaction) => Promise<T>, afterCommit?: (result: T, outcomes: CommitOutcome[]) => T): Promise<T>;
 };
+/** Database-side review and assignment can change the initially proposed status. */
+export type CommitOutcome = { domain: MappingDomain; sourceRecordKey: string; recordStatus: "valid" | "review_required" | "rejected" | "archived" };

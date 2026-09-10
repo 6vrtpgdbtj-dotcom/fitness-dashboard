@@ -13,6 +13,15 @@ it("shows source fields and submits a selected correction", async () => {
   fireEvent.click(screen.getByRole("button", { name: "수정 저장" }));
   await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/review/r1", expect.objectContaining({ body: JSON.stringify({ action: "correct", domain: "member", fields: { name: "Kim corrected" } }) })));
 });
+it("shows scored duplicate candidates and requires an explicit distinct-person or merge decision", async () => {
+  render(<RecordReviewTable records={[{ id: "r1", domain: "member", name: "Kim", tab_title: "다른 원본", record_status: "review_required", issues: [{ field: "identity", code: "duplicate_member_candidate", message: "review", candidates: [{ memberId: "m1", score: 65, reasons: ["name", "phone_last4"] }] }], source_fields: [] }]} members={[{ id: "m1", name: "Kim", external_member_id: "A1", source_record_key: "first" }]} />);
+  expect(screen.getByText(/65점/)).toBeInTheDocument();
+  expect(screen.getByText(/전화 뒤4자리/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "검토" }));
+  expect(screen.getByLabelText("병합 후 유지할 회원")).toHaveValue("");
+  fireEvent.click(screen.getByRole("button", { name: "별개 회원으로 승인" }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/review/r1", expect.objectContaining({ body: JSON.stringify({ action: "approve", domain: "member" }) })));
+});
 it("requires typed confirmation and supports cancel before historical deletion", async () => {
   render(<ConnectionControls connection={{ id: "s1", display_name: "Main", is_active: false }} />);
   fireEvent.click(screen.getByRole("button", { name: "원본 이력 삭제" }));
