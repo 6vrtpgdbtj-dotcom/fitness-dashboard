@@ -4,7 +4,7 @@ import type { AnalyticsRows } from "./types";
 
 const fields = {
   members:
-    "id,trainer_id,record_status,name,status,remaining_sessions,expected_end_date,latest_registration_date,updated_at",
+    "id,trainer_id,record_status,name,status,remaining_sessions,expected_end_date,latest_registration_date,updated_at,birth_date,goal",
   registrations:
     "id,trainer_id,record_status,member_id,registration_date,registration_type,paid_amount,registered_sessions,acquisition_source,status,product",
   leads:

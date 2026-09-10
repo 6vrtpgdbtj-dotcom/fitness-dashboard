@@ -259,6 +259,12 @@ export function DashboardView({
                       <th scope="col">신규 / 재등록 건수</th>
                       <th scope="col">진행 수업</th>
                       <th scope="col">담당 회원</th>
+                      <th scope="col">강한 등록 구간</th>
+                      <th scope="col">강한 운동목적</th>
+                      <th scope="col">강한 연령대</th>
+                      <th scope="col">입사 후 누적</th>
+                      <th scope="col">월평균</th>
+                      <th scope="col">연평균</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -282,6 +288,12 @@ export function DashboardView({
                         </td>
                         <td>{row.classes}회</td>
                         <td>{row.members}명</td>
+                        <td>{row.strongestSessionBucket}</td>
+                        <td>{row.strongestGoal}</td>
+                        <td>{row.strongestAgeGroup}</td>
+                        <td>{won(row.careerRevenue)}</td>
+                        <td>{won(row.monthlyAverageRevenue)}</td>
+                        <td>{won(row.yearlyAverageRevenue)}</td>
                       </tr>
                     ))}
                   </tbody>

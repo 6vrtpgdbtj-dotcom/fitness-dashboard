@@ -11,6 +11,8 @@ export type MemberRow = RecordScope & {
   expected_end_date: string | null;
   latest_registration_date: string | null;
   updated_at: string | null;
+  birth_date?: string | null;
+  goal?: string | null;
 };
 export type RegistrationRow = RecordScope & {
   member_id: string | null;
@@ -114,6 +116,12 @@ export type DashboardData = {
     newRevenue: number;
     renewedRevenue: number;
     additionalRevenue: number;
+    strongestSessionBucket: string;
+    strongestGoal: string;
+    strongestAgeGroup: string;
+    careerRevenue: number;
+    monthlyAverageRevenue: number;
+    yearlyAverageRevenue: number;
     newRegistrations: number;
     renewedRegistrations: number;
     classes: number;

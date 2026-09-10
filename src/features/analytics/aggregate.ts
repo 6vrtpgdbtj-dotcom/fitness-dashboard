@@ -48,6 +48,16 @@ const average = <T>(rows: T[], value: (row: T) => number | null) => {
   const known = rows.filter((row) => value(row) !== null);
   return known.length ? sum(known, value) / known.length : null;
 };
+const dominant = (values: Array<string | null | undefined>) => {
+  const counts = new Map<string, number>();
+  values.filter((value): value is string => !!value).forEach((value) => counts.set(value, (counts.get(value) ?? 0) + 1));
+  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"))[0]?.[0] ?? "미확인";
+};
+const sessionBucket = (sessions: number | null) => sessions === null ? null : sessions <= 10 ? "1–10회" : sessions <= 20 ? "11–20회" : sessions <= 30 ? "21–30회" : sessions <= 40 ? "31–40회" : sessions <= 50 ? "41–50회" : "51회 이상";
+const ageBucket = (birth: string | null | undefined, today: string) => {
+  if (!birth) return null; const age = Number(today.slice(0, 4)) - Number(birth.slice(0, 4));
+  return age < 20 ? "10대 이하" : age < 30 ? "20대" : age < 40 ? "30대" : age < 50 ? "40대" : age < 60 ? "50대" : "60대 이상";
+};
 const addDays = (date: string, days: number) =>
   new Date(Date.parse(date) + days * dayMs).toISOString().slice(0, 10);
 
@@ -334,6 +344,16 @@ export function buildDashboardData(
             newRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && row.registration_type === "new"), (row) => row.paid_amount),
             renewedRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && row.registration_type === "renewal"), (row) => row.paid_amount),
             additionalRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && !["new", "renewal"].includes(row.registration_type ?? "")), (row) => row.paid_amount),
+            strongestSessionBucket: dominant(ptPaid.filter((row) => row.trainer_id === trainer.id).map((row) => sessionBucket(row.registered_sessions))),
+            strongestGoal: dominant(rows.members.filter((row) => row.trainer_id === trainer.id).map((row) => row.goal)),
+            strongestAgeGroup: dominant(rows.members.filter((row) => row.trainer_id === trainer.id).map((row) => ageBucket(row.birth_date, today))),
+            ...(() => {
+              const career = rows.registrations.filter((row) => row.status === "paid" && row.trainer_id === trainer.id && !row.product?.startsWith("FC ") && row.registration_date);
+              const total = sum(career, (row) => row.paid_amount), first = career.map((row) => row.registration_date!).sort()[0];
+              const months = first ? Math.max(1, (Number(today.slice(0,4)) - Number(first.slice(0,4))) * 12 + Number(today.slice(5,7)) - Number(first.slice(5,7)) + 1) : 1;
+              const years = first ? Math.max(1, Number(today.slice(0,4)) - Number(first.slice(0,4)) + 1) : 1;
+              return { careerRevenue: total, monthlyAverageRevenue: total / months, yearlyAverageRevenue: total / years };
+            })(),
             newRegistrations: paid.filter(
               (row) =>
                 row.trainer_id === trainer.id &&
