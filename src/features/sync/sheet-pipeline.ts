@@ -74,12 +74,12 @@ export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain, 
       const amount = payment - 1;
       let currentDate = "";
       const year = Number(month[1]) < 100 ? 2000 + Number(month[1]) : Number(month[1]);
-      const output: unknown[][] = [["회원명", "결제 날짜", "매출", "RE/NEW", "결제방법", "상품"]];
+      const output: unknown[][] = [["회원명", "결제 날짜", "매출", "RE/NEW", "결제방법", "상품", "결제상태"]];
       for (const row of rows.slice(headerIndex + 1)) {
         const rawDate = row.slice(0, name).find((cell) => typeof cell === "string" && /\d{1,2}월\s*\d{1,2}일/.test(cell));
         if (typeof rawDate === "string") { const parts = rawDate.match(/(\d{1,2})월\s*(\d{1,2})일/)!; currentDate = `${year}-${parts[1].padStart(2,"0")}-${parts[2].padStart(2,"0")}`; }
         const member = row[name], paid = row[amount];
-        if (currentDate && typeof member === "string" && member.trim() && paid !== null && paid !== undefined && String(paid).trim()) output.push([member, currentDate, paid, row[type] ?? "", row[payment] ?? "", `FC ${String(row[name + 1] ?? "").trim() || "회원권"}`]);
+        if (currentDate && typeof member === "string" && member.trim() && paid !== null && paid !== undefined && String(paid).trim()) output.push([member, currentDate, paid, row[type] ?? "", row[payment] ?? "", `FC ${String(row[name + 1] ?? "").trim() || "회원권"}`, "결제완료"]);
       }
       if (output.length > 1) return output;
     }

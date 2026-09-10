@@ -49,7 +49,7 @@ describe("tab discovery", () => {
   });
   it("extracts FC membership sales with carried-down dates", () => {
     const rows = [["요약"], ["FC", "", "회원명", "개월수", "락커", "운동복", "", "결제 방법", "구분"], ["", "9월 1일", "박용봉", "", "O", "", "40,000", "", ""], ["", "", "신은결", "12개월", "O", "O", "400,000", "카드", "신규"]];
-    expect(extractRepeatedTables(rows, "registration", "26.9")).toEqual([["회원명", "결제 날짜", "매출", "RE/NEW", "결제방법", "상품"], ["박용봉", "2026-09-01", "40,000", "", "", "FC 회원권"], ["신은결", "2026-09-01", "400,000", "신규", "카드", "FC 12개월"]]);
+    expect(extractRepeatedTables(rows, "registration", "26.9")).toEqual([["회원명", "결제 날짜", "매출", "RE/NEW", "결제방법", "상품", "결제상태"], ["박용봉", "2026-09-01", "40,000", "", "", "FC 회원권", "결제완료"], ["신은결", "2026-09-01", "400,000", "신규", "카드", "FC 12개월", "결제완료"]]);
   });
   it("turns a daily trainer grid into class records", () => {
     const rows = [
