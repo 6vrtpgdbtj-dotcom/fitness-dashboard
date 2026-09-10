@@ -33,6 +33,22 @@ function exactField(domain: MappingDomain, value: unknown): string | null {
  * dashboard summary cells as records.
  */
 export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain, tabTitle = ""): unknown[][] {
+  if (domain === "registration" && /^\d{2,4}\.\d{1,2}$/.test(tabTitle)) {
+    const headerIndex = rows.findIndex((row) => row.some((cell) => String(cell ?? "").trim() === "FC") && row.some((cell) => exactField("registration", cell) === "name") && row.some((cell) => exactField("registration", cell) === "payment_method"));
+    if (headerIndex >= 0) {
+      const header = rows[headerIndex], month = tabTitle.split(".");
+      const name = header.findIndex((cell) => exactField("registration", cell) === "name"), payment = header.findIndex((cell) => exactField("registration", cell) === "payment_method"), type = header.findIndex((cell) => exactField("registration", cell) === "registration_type"), amount = payment - 1;
+      const year = Number(month[0]) < 100 ? 2000 + Number(month[0]) : Number(month[0]); let currentDate = "";
+      const output: unknown[][] = [["회원명", "결제 날짜", "매출", "RE/NEW", "결제방법", "상품", "결제상태"]];
+      for (const row of rows.slice(headerIndex + 1)) {
+        const rawDate = row.slice(0, name).find((cell) => typeof cell === "string" && /\d{1,2}월\s*\d{1,2}일/.test(cell));
+        if (typeof rawDate === "string") { const parts = rawDate.match(/(\d{1,2})월\s*(\d{1,2})일/)!; currentDate = `${year}-${parts[1].padStart(2,"0")}-${parts[2].padStart(2,"0")}`; }
+        const member = row[name], paid = row[amount];
+        if (currentDate && typeof member === "string" && member.trim() && paid != null && String(paid).trim()) output.push([member, currentDate, paid, row[type] ?? "", row[payment] ?? "", `FC ${String(row[name + 1] ?? "").trim() || "회원권"}`, "결제완료"]);
+      }
+      if (output.length > 1) return output;
+    }
+  }
   for (let headerRowIndex = 0; headerRowIndex < Math.min(rows.length, 100); headerRowIndex++) {
     const header = rows[headerRowIndex] ?? [];
     const anchors = header.flatMap((cell, index) => exactField(domain, cell) === "name" ? [index] : []);
