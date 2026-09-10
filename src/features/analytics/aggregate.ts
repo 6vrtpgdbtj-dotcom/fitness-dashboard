@@ -328,9 +328,12 @@ export function buildDashboardData(
             id: trainer.id,
             name: trainer.display_name,
             revenue: sum(
-              paid.filter((row) => row.trainer_id === trainer.id),
+              ptPaid.filter((row) => row.trainer_id === trainer.id),
               (row) => row.paid_amount,
             ),
+            newRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && row.registration_type === "new"), (row) => row.paid_amount),
+            renewedRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && row.registration_type === "renewal"), (row) => row.paid_amount),
+            additionalRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && !["new", "renewal"].includes(row.registration_type ?? "")), (row) => row.paid_amount),
             newRegistrations: paid.filter(
               (row) =>
                 row.trainer_id === trainer.id &&

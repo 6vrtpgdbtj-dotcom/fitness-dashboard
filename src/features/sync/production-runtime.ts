@@ -52,7 +52,18 @@ export function getSyncService() {
         if (!stored) throw new Error("Could not save the source tab.");
         // The fenced RPC resolves the latest scoped administrator-confirmed
         // domain before an ambiguous tab can be skipped.
-        if (stored.is_active && stored.domain) prepared.push({ tab, rows: extractRepeatedTables(scheduleRows, stored.domain, tab.title), domain: stored.domain, tabId: stored.id });
+        if (stored.is_active && stored.domain) {
+          if (scheduleRows !== sourceRows) {
+            const seen = new Set<string>();
+            const memberRows: unknown[][] = [["회원명", "담당트레이너"]];
+            for (const row of scheduleRows.slice(1)) {
+              const key = `${row[0]}:${row[3]}`;
+              if (row[0] && row[3] && !seen.has(key)) { seen.add(key); memberRows.push([row[0], row[3]]); }
+            }
+            prepared.push({ tab, rows: memberRows, domain: "member", tabId: stored.id });
+          }
+          prepared.push({ tab, rows: extractRepeatedTables(scheduleRows, stored.domain, tab.title), domain: stored.domain, tabId: stored.id });
+        }
         else if (stored.is_active) {
           // A domain decision can be made only after the administrator sees
           // the source. Keep the same immutable, redacted snapshot contract.

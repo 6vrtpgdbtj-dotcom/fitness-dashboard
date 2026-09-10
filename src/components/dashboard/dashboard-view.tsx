@@ -252,8 +252,11 @@ export function DashboardView({
                   <thead>
                     <tr>
                       <th scope="col">트레이너</th>
-                      <th scope="col">결제 매출</th>
-                      <th scope="col">신규 / 재등록</th>
+                      <th scope="col">PT 합계</th>
+                      <th scope="col">신규 매출</th>
+                      <th scope="col">재등록 매출</th>
+                      <th scope="col">기타·추가</th>
+                      <th scope="col">신규 / 재등록 건수</th>
                       <th scope="col">진행 수업</th>
                       <th scope="col">담당 회원</th>
                     </tr>
@@ -271,6 +274,9 @@ export function DashboardView({
                           />
                           <strong>{won(row.revenue)}</strong>
                         </td>
+                        <td>{won(row.newRevenue)}</td>
+                        <td>{won(row.renewedRevenue)}</td>
+                        <td>{won(row.additionalRevenue)}</td>
                         <td>
                           {row.newRegistrations} / {row.renewedRegistrations}건
                         </td>

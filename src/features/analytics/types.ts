@@ -111,6 +111,9 @@ export type DashboardData = {
     id: string;
     name: string;
     revenue: number;
+    newRevenue: number;
+    renewedRevenue: number;
+    additionalRevenue: number;
     newRegistrations: number;
     renewedRegistrations: number;
     classes: number;

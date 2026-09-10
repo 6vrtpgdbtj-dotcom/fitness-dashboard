@@ -61,7 +61,7 @@ it("updates linked metrics after a trainer selection and validates reversed date
   );
   expect(
     within(
-      screen.getByRole("group", { name: "선택 기간 결제 매출" }),
+      screen.getByRole("group", { name: "선택 기간 PT 매출" }),
     ).getByText("300,000"),
   ).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("담당 트레이너"), {
@@ -69,7 +69,7 @@ it("updates linked metrics after a trainer selection and validates reversed date
   });
   expect(
     within(
-      screen.getByRole("group", { name: "선택 기간 결제 매출" }),
+      screen.getByRole("group", { name: "선택 기간 PT 매출" }),
     ).getByText("100,000"),
   ).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("시작일"), {
