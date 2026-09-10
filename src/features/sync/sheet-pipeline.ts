@@ -67,10 +67,10 @@ export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain, 
   }
   if (domain === "registration") {
     const month = tabTitle.match(/^(\d{2,4})\.(\d{1,2})$/);
-    const headerIndex = rows.findIndex((row) => row.some((cell) => cell === "회원명") && row.some((cell) => cell === "결제 방법") && row.some((cell) => cell === "구분"));
+    const headerIndex = rows.findIndex((row) => row.some((cell) => exactField("registration", cell) === "name") && row.some((cell) => exactField("registration", cell) === "payment_method") && row.some((cell) => exactField("registration", cell) === "registration_type"));
     if (month && headerIndex >= 0) {
       const header = rows[headerIndex];
-      const name = header.indexOf("회원명"), payment = header.indexOf("결제 방법"), type = header.indexOf("구분");
+      const name = header.findIndex((cell) => exactField("registration", cell) === "name"), payment = header.findIndex((cell) => exactField("registration", cell) === "payment_method"), type = header.findIndex((cell) => exactField("registration", cell) === "registration_type");
       const amount = payment - 1;
       let currentDate = "";
       const year = Number(month[1]) < 100 ? 2000 + Number(month[1]) : Number(month[1]);

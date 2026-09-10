@@ -31,7 +31,7 @@ export const canonicalFields: Record<MappingDomain, readonly CanonicalField[]> =
   ],
   registration: [...identity, acquisition, paid, registered, registrationDate, endDate,
     field("external_registration_id", "등록ID", ["등록번호", "결제번호"], ["identifier", "integer", "freeText"]),
-    field("registration_type", "등록구분", ["등록유형", "신규재등록", "renew", "renewal"], ["status", "freeText"]),
+    field("registration_type", "등록구분", ["등록유형", "신규재등록", "구분", "renew", "renewal"], ["status", "freeText"]),
     field("product", "상품", ["상품명", "등록상품", "프로그램"]),
     field("list_amount", "정가", ["정상금액", "정가금액"], ["money", "integer"]),
     field("price_per_session", "회당단가", ["회당금액", "수업단가"], ["money", "integer"]),
