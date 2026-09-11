@@ -68,6 +68,12 @@ const ageBucket = (birth: string | null | undefined, today: string) => {
 };
 const addDays = (date: string, days: number) =>
   new Date(Date.parse(date) + days * dayMs).toISOString().slice(0, 10);
+const scheduleOperationMarkers = new Set(["식사", "휴무", "반차", "오전반차", "오후반차", "회의", "이프", "오티", "청소", "교육"]);
+const isScheduleOperationMarker = (externalId: string | null | undefined) => {
+  if (!externalId?.startsWith("schedule|")) return false;
+  try { return scheduleOperationMarkers.has(decodeURIComponent(externalId.split("|")[1] ?? "")); }
+  catch { return false; }
+};
 
 /** Receives rows already protected by database RLS; repeats trainer filtering as defense in depth.
  * Dates are inclusive Korean calendar dates. Revenue is gross paid, refunds separate.
@@ -92,7 +98,7 @@ export function buildDashboardData(
         (scope.role === "admin" || row.trainer_id === scope.trainerId),
     );
   const classMap = new Map<string, AnalyticsRows["classes"][number]>();
-  for (const row of permitted(input.classes)) {
+  for (const row of permitted(input.classes).filter((row) => !isScheduleOperationMarker(row.external_class_id))) {
     const key = `${row.trainer_id ?? ""}:${row.class_date ?? ""}:${row.starts_at ?? ""}`;
     const previous = classMap.get(key);
     if (!previous || (!previous.external_class_id?.startsWith("schedule|") && row.external_class_id?.startsWith("schedule|"))) classMap.set(key, row);
