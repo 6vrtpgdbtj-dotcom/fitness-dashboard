@@ -185,7 +185,7 @@ export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain, 
   return rows;
 }
 
-const nonAppointments = new Set(["식사", "휴무", "회의", "이프", "오티", "청소", "교육"]);
+const nonAppointments = new Set(["식사", "휴무", "반차", "오전반차", "오후반차", "회의", "이프", "오티", "청소", "교육"]);
 
 export function extractScheduleGrid(rows: unknown[][], tabTitle: string, spreadsheetTitle: string, today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())): unknown[][] {
   const month = spreadsheetTitle.match(/(?:^|\D)(\d{2,4})[.년\s-]+(\d{1,2})(?:월|\D|$)/);
