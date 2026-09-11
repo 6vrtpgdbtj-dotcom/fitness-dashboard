@@ -13,6 +13,10 @@ import { SyncPulse } from "../sync-pulse";
 afterEach(cleanup);
 
 describe("accessible operational components", () => {
+  it("keeps legacy field and OT amounts in the PT chart total", () => {
+    render(<RevenueChart data={[{ month: "2026-08", newRevenue: 0, renewedRevenue: 0, additionalRevenue: 0, fieldRevenue: 30000, otRevenue: 20000, uncategorizedRevenue: 0, refunds: 0 }]} />);
+    expect(screen.getByText("50,000")).toBeInTheDocument();
+  });
   it("provides exact chart values by keyboard and an accessible data table", () => {
     render(
       <RevenueChart
@@ -22,20 +26,21 @@ describe("accessible operational components", () => {
             newRevenue: 100000,
             renewedRevenue: 200000,
             additionalRevenue: 0,
-            fieldRevenue: 30000,
-            otRevenue: 20000,
+            sourceRevenue: { "필드": 30000, "OT": 20000, "상담": 40000, "워크인": 50000 },
             uncategorizedRevenue: 10000,
             refunds: 5000,
           },
         ]}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /9월.*신규.*100,000.*필드.*30,000.*OT.*20,000/ }));
+    fireEvent.click(screen.getByRole("button", { name: /9월.*신규.*100,000.*유입경로.*상담.*40,000.*워크인.*50,000.*필드.*30,000.*OT.*20,000/ }));
     expect(screen.getByRole("status")).toHaveTextContent("200,000");
     fireEvent.click(screen.getByText("표로 보기"));
     const revenueTable = screen.getByRole("table", { name: "기간별 PT 등록 매출" });
     expect(within(revenueTable).getByText("30,000원")).toBeInTheDocument();
     expect(within(revenueTable).getByText("20,000원")).toBeInTheDocument();
+    expect(within(revenueTable).getByText("40,000원")).toBeInTheDocument();
+    expect(within(revenueTable).getByText("50,000원")).toBeInTheDocument();
     expect(within(revenueTable).getByText("10,000원")).toBeInTheDocument();
     expect(within(revenueTable).getByText("5,000원")).toBeInTheDocument();
   });

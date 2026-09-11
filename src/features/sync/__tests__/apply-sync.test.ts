@@ -256,6 +256,9 @@ describe("domain normalization", () => {
     expect(normalizeRegistration({ name: "민수", registration_date: "2026-09-01", paid_amount: 100000, registration_type: "필드" }).values.registration_type).toBe("field");
     expect(normalizeRegistration({ name: "서연", registration_date: "2026-09-01", paid_amount: 50000, registration_type: "오티" }).values.registration_type).toBe("ot");
   });
+  it("normalizes the real monthly sheet RE abbreviation as renewal", () => {
+    expect(normalizeRegistration({ name: "한예정", registration_date: "2026-08-27", paid_amount: 2750000, registration_type: "RE" }).values.registration_type).toBe("renewal");
+  });
   it("keeps an explicitly uncategorized paid sale valid", () => {
     expect(normalizeRegistration({ name: "미분류회원", registration_date: "2026-09-01", paid_amount: 123456, registration_type: "미분류" })).toMatchObject({ values: { registration_type: "uncategorized", paid_amount: 123456 }, issues: [] });
   });

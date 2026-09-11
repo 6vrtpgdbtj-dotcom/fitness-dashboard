@@ -4,6 +4,7 @@ import type {
   DashboardData,
   DateRange,
   MemberSummary,
+  RegistrationRow,
   RevenuePoint,
 } from "./types";
 
@@ -46,6 +47,14 @@ const sum = <T>(rows: T[], value: (row: T) => number | null) =>
 const average = <T>(rows: T[], value: (row: T) => number | null) => {
   const known = rows.filter((row) => value(row) !== null);
   return known.length ? sum(known, value) / known.length : null;
+};
+const sourceRevenue = (rows: RegistrationRow[]) => {
+  const totals: Record<string, number> = {};
+  rows.forEach((row) => {
+    const source = row.acquisition_source?.normalize("NFKC").trim() || "유입경로 미확인";
+    totals[source] = (totals[source] ?? 0) + Number(row.paid_amount ?? 0);
+  });
+  return Object.fromEntries(Object.entries(totals).sort(([a], [b]) => a.localeCompare(b, "ko")));
 };
 const dominant = (values: Array<string | null | undefined>) => {
   const counts = new Map<string, number>();
@@ -255,6 +264,7 @@ export function buildDashboardData(
       fieldRevenue: sum(current.filter((row) => row.registration_type === "field"), (row) => row.paid_amount),
       otRevenue: sum(current.filter((row) => row.registration_type === "ot"), (row) => row.paid_amount),
       uncategorizedRevenue: sum(current.filter((row) => !["new", "renewal", "field", "ot", "additional"].includes(row.registration_type ?? "")), (row) => row.paid_amount),
+      sourceRevenue: sourceRevenue(current),
       refunds: sum(
         ptRefunded.filter((row) => row.registration_date?.startsWith(month)),
         (row) => row.paid_amount,
@@ -354,6 +364,7 @@ export function buildDashboardData(
             fieldRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && row.registration_type === "field"), (row) => row.paid_amount),
             otRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && row.registration_type === "ot"), (row) => row.paid_amount),
             uncategorizedRevenue: sum(ptPaid.filter((row) => row.trainer_id === trainer.id && !["new", "renewal", "field", "ot", "additional"].includes(row.registration_type ?? "")), (row) => row.paid_amount),
+            sourceRevenue: sourceRevenue(ptPaid.filter((row) => row.trainer_id === trainer.id)),
             strongestSessionBucket: dominant(ptPaid.filter((row) => row.trainer_id === trainer.id).map((row) => sessionBucket(row.registered_sessions))),
             strongestGoal: dominant(rows.members.filter((row) => row.trainer_id === trainer.id).map((row) => row.exercise_goal)),
             strongestAgeGroup: dominant(rows.members.filter((row) => row.trainer_id === trainer.id).map((row) => ageBucket(row.birth_date, today))),

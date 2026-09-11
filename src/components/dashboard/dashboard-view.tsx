@@ -74,6 +74,7 @@ export function DashboardView({
       : remaining.knownMembers
         ? `확인된 잔여 ${number(remaining.knownSubtotal)}회 · ${number(remaining.unknownMembers)}명 미확인`
         : `잔여 세션 미확인 · ${number(remaining.unknownMembers)}명 기록 필요`;
+  const trainerSourceNames = [...new Set(data.trainerComparison.flatMap((row) => Object.keys(row.sourceRevenue ?? {})))].sort((a, b) => a.localeCompare(b, "ko"));
   return (
     <>
       <div className="dashboard-toolbar">
@@ -255,8 +256,7 @@ export function DashboardView({
                       <th scope="col">PT 합계</th>
                       <th scope="col">신규 매출</th>
                       <th scope="col">재등록 매출</th>
-                      <th scope="col">필드 매출</th>
-                      <th scope="col">OT 매출</th>
+                      {trainerSourceNames.map((source) => <th scope="col" key={source}>{source} 매출</th>)}
                       <th scope="col">추가 매출</th>
                       <th scope="col">미분류</th>
                       <th scope="col">신규 / 재등록 건수</th>
@@ -285,8 +285,7 @@ export function DashboardView({
                         </td>
                         <td>{won(row.newRevenue)}</td>
                         <td>{won(row.renewedRevenue)}</td>
-                        <td>{won(row.fieldRevenue)}</td>
-                        <td>{won(row.otRevenue)}</td>
+                        {trainerSourceNames.map((source) => <td key={source}>{won(row.sourceRevenue?.[source] ?? 0)}</td>)}
                         <td>{won(row.additionalRevenue)}</td>
                         <td>{won(row.uncategorizedRevenue)}</td>
                         <td>

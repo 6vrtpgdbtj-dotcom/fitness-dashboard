@@ -64,6 +64,7 @@ export type RevenuePoint = {
   fieldRevenue?: number;
   otRevenue?: number;
   uncategorizedRevenue?: number;
+  sourceRevenue?: Record<string, number>;
   refunds: number;
 };
 export type MemberSummary = {
@@ -123,6 +124,7 @@ export type DashboardData = {
     fieldRevenue: number;
     otRevenue: number;
     uncategorizedRevenue: number;
+    sourceRevenue?: Record<string, number>;
     strongestSessionBucket: string;
     strongestGoal: string;
     strongestAgeGroup: string;

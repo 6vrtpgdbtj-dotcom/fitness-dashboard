@@ -181,15 +181,15 @@ describe("scoped operational analytics", () => {
   it("accepts a multi-year custom period", () => {
     expect(parsePeriod("2023-01-01", "2026-09-30")).toEqual({ start: "2023-01-01", end: "2026-09-30" });
   });
-  it("separates each PT sale category for the team and each trainer", () => {
+  it("keeps registration status separate from every source category for the team and each trainer", () => {
     const categoryRows: AnalyticsRows = {
       ...rows,
       registrations: [
-        { ...registration, id: "new", trainer_id: "t1", registration_type: "new", paid_amount: 100000 },
-        { ...registration, id: "renewal", trainer_id: "t1", registration_type: "renewal", paid_amount: 200000 },
-        { ...registration, id: "field", trainer_id: "t1", registration_type: "field", paid_amount: 300000 },
-        { ...registration, id: "ot", trainer_id: "t2", registration_type: "ot", paid_amount: 400000 },
-        { ...registration, id: "unknown", trainer_id: "t2", registration_type: null, paid_amount: 500000 },
+        { ...registration, id: "field-new", trainer_id: "t1", registration_type: "new", acquisition_source: "필드", paid_amount: 100000 },
+        { ...registration, id: "walkin-new", trainer_id: "t1", registration_type: "new", acquisition_source: "워크인", paid_amount: 200000 },
+        { ...registration, id: "ot-renewal", trainer_id: "t2", registration_type: "renewal", acquisition_source: "OT", paid_amount: 300000 },
+        { ...registration, id: "consult-new", trainer_id: "t2", registration_type: "new", acquisition_source: "상담", paid_amount: 400000 },
+        { ...registration, id: "handoff-renewal", trainer_id: "t2", registration_type: "renewal", acquisition_source: "인계 재등록", paid_amount: 500000 },
         { ...registration, id: "fc", trainer_id: null, registration_type: "new", paid_amount: 600000, product: "FC 12개월" },
         { ...registration, id: "fc-refund", trainer_id: null, registration_type: "new", paid_amount: 50000, product: "FC 12개월", status: "refunded" },
       ],
@@ -199,10 +199,10 @@ describe("scoped operational analytics", () => {
     expect(data.metrics.fcRevenue).toBe(600000);
     expect(data.metrics.refunds).toBe(0);
     expect(data.revenue[0].refunds).toBe(0);
-    expect(data.revenue[0]).toMatchObject({ newRevenue: 100000, renewedRevenue: 200000, fieldRevenue: 300000, otRevenue: 400000, uncategorizedRevenue: 500000 });
+    expect(data.revenue[0]).toMatchObject({ newRevenue: 700000, renewedRevenue: 800000, sourceRevenue: { "필드": 100000, "워크인": 200000, "OT": 300000, "상담": 400000, "인계 재등록": 500000 } });
     expect(data.trainerComparison).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "t1", revenue: 600000, newRevenue: 100000, renewedRevenue: 200000, fieldRevenue: 300000, otRevenue: 0, uncategorizedRevenue: 0 }),
-      expect.objectContaining({ id: "t2", revenue: 900000, newRevenue: 0, renewedRevenue: 0, fieldRevenue: 0, otRevenue: 400000, uncategorizedRevenue: 500000 }),
+      expect.objectContaining({ id: "t1", revenue: 300000, newRevenue: 300000, renewedRevenue: 0, sourceRevenue: { "필드": 100000, "워크인": 200000 } }),
+      expect.objectContaining({ id: "t2", revenue: 1200000, newRevenue: 400000, renewedRevenue: 800000, sourceRevenue: { "OT": 300000, "상담": 400000, "인계 재등록": 500000 } }),
     ]));
   });
   it("separates refunds and registration types, excluding pending and review records", () => {
@@ -232,6 +232,7 @@ describe("scoped operational analytics", () => {
         fieldRevenue: 0,
         otRevenue: 0,
         uncategorizedRevenue: 0,
+        sourceRevenue: { "소개": 600000 },
         refunds: 50000,
       },
     ]);

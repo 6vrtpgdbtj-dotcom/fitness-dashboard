@@ -26,6 +26,15 @@ function exactField(domain: MappingDomain, value: unknown): string | null {
   return canonicalFields[domain].find((field) => [field.id, field.label, ...field.synonyms].some((alias) => normalizeHeader(alias) === key))?.id ?? null;
 }
 
+function monthDay(value: unknown, year: number): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  const full = text.match(/^(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일$/);
+  if (full) return `${full[1]}-${full[2].padStart(2, "0")}-${full[3].padStart(2, "0")}`;
+  const match = text.match(/^(\d{1,2})(?:월|\/)\s*(\d{1,2})(?:일)?$/);
+  return match ? `${year}-${match[1].padStart(2, "0")}-${match[2].padStart(2, "0")}` : null;
+}
+
 /**
  * Some operational workbooks place the same table more than once on a row
  * (for example PT and FC sales). Convert those repeated blocks into one
@@ -47,14 +56,34 @@ export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain, 
         const match = String(cell ?? "").trim().match(/^(PT|FC)(?:\s*매출)?$/i);
         return match ? [{ kind: match[1].toUpperCase(), start: index }] : [];
       }));
-      let markers = [...new Map(detectedMarkers.map((marker) => [marker.start, marker])).values()].sort((a, b) => a.start - b.start);
       const nameAnchors = header.flatMap((cell, index) => exactField("registration", cell) === "name" ? [index] : []);
-      const markersShareHeader = header.some((cell) => /^(?:PT|FC)(?:\s*매출)?$/i.test(String(cell ?? "").trim()));
+      const ptEntryBlocks = nameAnchors.length >= 2 && nameAnchors.every((start, index) => {
+        const end = nameAnchors[index + 1] ?? header.length;
+        return header.slice(start, end).some((cell) => ["trainer_name", "acquisition_source"].includes(exactField("registration", cell) ?? ""));
+      });
+      const headerMarkers = header.flatMap((cell, index) => {
+        const match = String(cell ?? "").trim().match(/^(PT|FC)(?:\s*매출)?$/i);
+        return match ? [{ kind: match[1].toUpperCase(), start: index }] : [];
+      });
+      const adjacentMarkers = (rows[headerIndex - 1] ?? []).flatMap((cell, index) => {
+        const match = String(cell ?? "").trim().match(/^(PT|FC)(?:\s*매출)?$/i);
+        return match ? [{ kind: match[1].toUpperCase(), start: index }] : [];
+      });
+      const explicitMarkers = headerMarkers.length ? headerMarkers : adjacentMarkers;
+      let markers = explicitMarkers.length
+        ? explicitMarkers
+        : ptEntryBlocks
+          ? nameAnchors.map((start) => ({ kind: "PT", start }))
+          : [...new Map(detectedMarkers.map((marker) => [marker.start, marker])).values()].sort((a, b) => a.start - b.start);
+      const markersShareHeader = explicitMarkers.length > 0;
       if (!markersShareHeader && markers.length >= 2 && nameAnchors.length >= markers.length) {
         markers = markers.map((marker, index) => ({ ...marker, start: nameAnchors[index] }));
       }
       if (!markers.length) markers.push({ kind: header.some((cell) => exactField("registration", cell) === "trainer_name") ? "PT" : "FC", start: 0 });
-      const output: unknown[][] = [["회원명", "결제 날짜", "매출", "RE/NEW", "담당트레이너", "판매트레이너", "결제방법", "상품", "결제상태"]];
+      const includeAcquisition = header.some((cell) => exactField("registration", cell) === "acquisition_source");
+      const output: unknown[][] = [["회원명", "결제 날짜", "매출", "RE/NEW", "담당트레이너", "판매트레이너", ...(includeAcquisition ? ["유입경로"] : []), "결제방법", "상품", "결제상태"]];
+      const fcHeaderIndex = rows.findIndex((row, index) => index > headerIndex && row.some((cell) => /^FC$/i.test(String(cell ?? "").trim())) && row.some((cell) => exactField("registration", cell) === "name"));
+      const entryRows = rows.slice(headerIndex + 1, fcHeaderIndex >= 0 ? fcHeaderIndex : undefined);
       for (let sectionIndex = 0; sectionIndex < markers.length; sectionIndex++) {
         const marker = markers[sectionIndex];
         const end = markers[sectionIndex + 1]?.start ?? header.length;
@@ -63,23 +92,41 @@ export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain, 
         if (name < 0) continue;
         const payment = locate("payment_method");
         const type = locate("registration_type");
+        const acquisition = locate("acquisition_source");
         const trainer = locate("trainer_name");
         const salesTrainer = locate("sales_trainer_name");
         const sessions = locate("registered_sessions");
         const mappedAmount = locate("paid_amount");
         const amount = mappedAmount >= 0 ? mappedAmount : payment > marker.start ? payment - 1 : -1;
-        const sectionHasOwnDates = rows.slice(headerIndex + 1).some((row) => row.slice(marker.start, end).some((cell) => typeof cell === "string" && /\d{1,2}월\s*\d{1,2}일/.test(cell)));
+        const sectionHasOwnDates = entryRows.some((row) => row.slice(marker.start, end).some((cell) => monthDay(cell, year)));
         let currentDate = "";
-        for (const row of rows.slice(headerIndex + 1)) {
-          const sectionDate = row.slice(marker.start, end).find((cell) => typeof cell === "string" && /\d{1,2}월\s*\d{1,2}일/.test(cell));
-          const rawDate = sectionDate ?? (!sectionHasOwnDates ? row.find((cell) => typeof cell === "string" && /\d{1,2}월\s*\d{1,2}일/.test(cell)) : undefined);
-          if (typeof rawDate === "string") { const parts = rawDate.match(/(\d{1,2})월\s*(\d{1,2})일/)!; currentDate = `${year}-${parts[1].padStart(2,"0")}-${parts[2].padStart(2,"0")}`; }
+        for (const row of entryRows) {
+          const sectionDate = row.slice(marker.start, end).find((cell) => monthDay(cell, year));
+          const rawDate = sectionDate ?? (!sectionHasOwnDates ? row.find((cell) => monthDay(cell, year)) : undefined);
+          currentDate = monthDay(rawDate, year) ?? currentDate;
           const member = row[name], paid = amount >= 0 ? row[amount] : null;
           if (!currentDate || typeof member !== "string" || !member.trim() || paid == null || !String(paid).trim()) continue;
           const plan = marker.kind === "PT"
             ? `${String(sessions >= 0 ? row[sessions] ?? "" : "").trim() || "회원권"}${sessions >= 0 && String(row[sessions] ?? "").trim() && !/회$/.test(String(row[sessions])) ? "회" : ""}`
-            : String(row[name + 1] ?? "").trim() || "회원권";
-          output.push([member, currentDate, paid, type >= 0 ? row[type] ?? "" : "", trainer >= 0 ? row[trainer] ?? "" : "", salesTrainer >= 0 ? row[salesTrainer] ?? "" : "", payment >= 0 ? row[payment] ?? "" : "", `${marker.kind} ${plan}`, "결제완료"]);
+            : exactField("registration", header[name + 1]) === "registration_date" ? "회원권" : String(row[name + 1] ?? "").trim() || "회원권";
+          output.push([member, currentDate, paid, type >= 0 ? row[type] ?? "" : "", trainer >= 0 ? row[trainer] ?? "" : "", salesTrainer >= 0 ? row[salesTrainer] ?? "" : "", ...(includeAcquisition ? [acquisition >= 0 ? row[acquisition] ?? "" : ""] : []), payment >= 0 ? row[payment] ?? "" : "", `${marker.kind} ${plan}`, "결제완료"]);
+        }
+      }
+      if (fcHeaderIndex >= 0) {
+        const fcHeader = rows[fcHeaderIndex];
+        const locateFc = (field: string) => fcHeader.findIndex((cell) => exactField("registration", cell) === field);
+        const fcName = locateFc("name");
+        const fcDate = Math.max(locateFc("registration_date"), fcHeader.findIndex((cell) => /^날짜$/.test(String(cell ?? "").trim())));
+        const fcAmount = Math.max(locateFc("paid_amount"), fcHeader.findIndex((cell) => /^금액$/.test(String(cell ?? "").trim())));
+        const fcType = locateFc("registration_type");
+        const fcPayment = locateFc("payment_method");
+        let currentDate = "";
+        for (const row of rows.slice(fcHeaderIndex + 1)) {
+          currentDate = monthDay(row[fcDate], year) ?? currentDate;
+          const member = row[fcName], paid = row[fcAmount];
+          if (!currentDate || typeof member !== "string" || !member.trim() || paid == null || !String(paid).trim()) continue;
+          const plan = String(row[fcName + 1] ?? "").trim() || "회원권";
+          output.push([member, currentDate, paid, fcType >= 0 ? row[fcType] ?? "" : "", "", "", ...(includeAcquisition ? [""] : []), fcPayment >= 0 ? row[fcPayment] ?? "" : "", `FC ${plan}`, "결제완료"]);
         }
       }
       if (output.length > 1) return output;
