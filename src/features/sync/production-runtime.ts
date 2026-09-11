@@ -40,7 +40,7 @@ export function getSyncService() {
       const tabs = (metadata.data.sheets ?? []).flatMap((sheet) => typeof sheet.properties?.sheetId === "number" && sheet.properties.title ? [{ googleSheetId: sheet.properties.sheetId, title: sheet.properties.title }] : []);
       const total = emptyResult();
       // Apply members first to resolve organization-scoped links in other tabs.
-      const prepared: Array<{ tab: typeof tabs[number]; rows: unknown[][]; domain: MappingDomain; tabId: string }> = [];
+      const prepared: Array<{ tab: typeof tabs[number]; rows: unknown[][]; domain: MappingDomain; tabId: string; generated: boolean }> = [];
       for (const tab of tabs) {
         const values = await sheets.spreadsheets.values.get({ spreadsheetId: connection.spreadsheetId, range: `'${tab.title.replaceAll("'", "''")}'`, valueRenderOption: "FORMATTED_VALUE", dateTimeRenderOption: "FORMATTED_STRING" }, { timeout: 15000 });
         const sourceRows: unknown[][] = values.data.values ?? [];
@@ -60,9 +60,10 @@ export function getSyncService() {
               const key = `${row[0]}:${row[3]}`;
               if (row[0] && row[3] && !seen.has(key)) { seen.add(key); memberRows.push([row[0], row[3]]); }
             }
-            prepared.push({ tab, rows: memberRows, domain: "member", tabId: stored.id });
+            prepared.push({ tab, rows: memberRows, domain: "member", tabId: stored.id, generated: true });
           }
-          prepared.push({ tab, rows: extractRepeatedTables(scheduleRows, stored.domain, tab.title), domain: stored.domain, tabId: stored.id });
+          const extractedRows = extractRepeatedTables(scheduleRows, stored.domain, tab.title);
+          prepared.push({ tab, rows: extractedRows, domain: stored.domain, tabId: stored.id, generated: extractedRows !== scheduleRows });
         }
         else if (stored.is_active) {
           // A domain decision can be made only after the administrator sees
@@ -75,12 +76,15 @@ export function getSyncService() {
         }
       }
       prepared.sort((a, b) => Number(b.domain === "member") - Number(a.domain === "member"));
-      for (const { tab, rows, domain, tabId } of prepared) {
+      for (const { tab, rows, domain, tabId, generated } of prepared) {
         await rpc(db, "sync_assert_lease", { p_connection_id: connection.id, p_lease: lease });
         const scope = { organizationId: connection.organizationId, sourceConnectionId: connection.id, sourceTabId: tabId };
         const versions = checked(await db.from("mapping_versions").select("id,version,columns,confirmed_by,mapping_fingerprint").eq("organization_id", connection.organizationId).eq("source_connection_id", connection.id).eq("source_tab_id", tabId).order("version", { ascending: false }));
         const history: ConfirmedMapping[] = (versions ?? []).filter((version) => version.confirmed_by && version.columns?.domain === domain && Array.isArray(version.columns?.fields)).map((version) => ({ ...scope, domain, version: version.version, headerRowIndex: version.columns.headerRowIndex, columns: version.columns.fields }));
-        const mapping = mapColumns({ ...scope, rows, domain, tabTitle: tab.title }, history);
+        // Generated tables use canonical headers owned by this parser. Reusing
+        // an old administrator "unmapped" choice from the irregular source
+        // layout would silently discard trainer/source columns after parsing.
+        const mapping = mapColumns({ ...scope, rows, domain, tabTitle: tab.title }, generated ? [] : history);
         // Store accepted mapping decisions; sample values never enter history.
         const columns = { domain, headerRowIndex: mapping.headerRowIndex, fields: mapping.fields.map((field) => ({ sourceHeader: field.sourceHeader, field: field.field })) };
         let version = (versions ?? []).find((entry) => entry.mapping_fingerprint === mapping.mappingFingerprint && stableJson(entry.columns) === stableJson(columns));
