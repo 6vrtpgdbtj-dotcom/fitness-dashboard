@@ -87,6 +87,16 @@ export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain, 
       for (let sectionIndex = 0; sectionIndex < markers.length; sectionIndex++) {
         const marker = markers[sectionIndex];
         const end = markers[sectionIndex + 1]?.start ?? header.length;
+        const sectionTrainer = marker.kind === "PT"
+          ? markerRows
+              .flatMap((row) => row.slice(marker.start, end))
+              .map((cell) => String(cell ?? "").trim())
+              .findLast((text) =>
+                /^[가-힣]{2,6}$/.test(text) &&
+                exactField("registration", text) === null &&
+                !/^(?:날짜|담당자(?:\s*배정)?|회원명|구분|유입경로|결제방법|매출)$/.test(text),
+              )
+          : undefined;
         const locate = (field: string) => header.findIndex((cell, index) => index >= marker.start && index < end && exactField("registration", cell) === field);
         const name = locate("name");
         if (name < 0) continue;
@@ -109,7 +119,10 @@ export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain, 
           const plan = marker.kind === "PT"
             ? `${String(sessions >= 0 ? row[sessions] ?? "" : "").trim() || "회원권"}${sessions >= 0 && String(row[sessions] ?? "").trim() && !/회$/.test(String(row[sessions])) ? "회" : ""}`
             : exactField("registration", header[name + 1]) === "registration_date" ? "회원권" : String(row[name + 1] ?? "").trim() || "회원권";
-          output.push([member, currentDate, paid, type >= 0 ? row[type] ?? "" : "", trainer >= 0 ? row[trainer] ?? "" : "", salesTrainer >= 0 ? row[salesTrainer] ?? "" : "", ...(includeAcquisition ? [acquisition >= 0 ? row[acquisition] ?? "" : ""] : []), payment >= 0 ? row[payment] ?? "" : "", `${marker.kind} ${plan}`, "결제완료"]);
+          const assignedTrainer = trainer >= 0 && String(row[trainer] ?? "").trim()
+            ? row[trainer]
+            : sectionTrainer ?? "";
+          output.push([member, currentDate, paid, type >= 0 ? row[type] ?? "" : "", assignedTrainer, salesTrainer >= 0 ? row[salesTrainer] ?? "" : "", ...(includeAcquisition ? [acquisition >= 0 ? row[acquisition] ?? "" : ""] : []), payment >= 0 ? row[payment] ?? "" : "", `${marker.kind} ${plan}`, "결제완료"]);
         }
       }
       if (fcHeaderIndex >= 0) {

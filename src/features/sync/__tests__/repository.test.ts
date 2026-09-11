@@ -129,6 +129,17 @@ describe("tab discovery", () => {
     expect(extracted).toContainEqual(["한예정", "2026-08-27", "2,750,000", "RE", "정윤수", "", "재등록", "카드", "PT 50회", "결제완료"]);
     expect(extracted).toContainEqual(["폴 카바나", "2026-08-02", "93,500", "재등록", "", "", "", "카드", "FC 1개월", "결제완료"]);
   });
+  it("inherits the trainer section title through a 담당자 배정 subheader", () => {
+    const rows = [
+      ["PT 매출"],
+      ["", "정윤수"],
+      ["날짜", "회원명", "매출", "RE/NEW", "담당자 배정", "유입경로"],
+      ["8/3", "김회원", "1,100,000", "NEW", "", "OT"],
+    ];
+    expect(extractRepeatedTables(rows, "registration", "26.8")).toContainEqual([
+      "김회원", "2026-08-03", "1,100,000", "NEW", "정윤수", "", "OT", "", "PT 회원권", "결제완료",
+    ]);
+  });
   it("keeps the legacy monthly FC layout when the FC marker is outside the header", () => {
     const rows = [
       ["FC 매출"],
