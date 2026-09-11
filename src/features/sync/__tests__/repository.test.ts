@@ -140,6 +140,19 @@ describe("tab discovery", () => {
       "김회원", "2026-08-03", "1,100,000", "NEW", "정윤수", "", "OT", "", "PT 회원권", "결제완료",
     ]);
   });
+  it("carries a trainer label beside a PT block through following sales rows", () => {
+    const rows = [
+      ["PT매출"],
+      [],
+      ["", "회원명", "세션", "결제 날짜", "매출", "RE/NEW", "담당트레이너", "유입경로", "결제방법", "", "회원명", "세션", "결제 날짜", "매출", "RE/NEW", "담당트레이너", "유입경로", "결제방법"],
+      ["박세준", "김회원", 20, "8/11", "1,100,000", "NEW", "", "필드", "카드", "정윤수", "이회원", 10, "8/14", "700,000", "NEW", "", "워크인", "카드"],
+      ["", "", "", "", "", "", "", "", "", "", "한회원", 50, "8/27", "2,750,000", "RE", "", "재등록", "카드"],
+    ];
+    const extracted = extractRepeatedTables(rows, "registration", "26.8");
+    expect(extracted).toContainEqual(["김회원", "2026-08-11", "1,100,000", "NEW", "박세준", "", "필드", "카드", "PT 20회", "결제완료"]);
+    expect(extracted).toContainEqual(["이회원", "2026-08-14", "700,000", "NEW", "정윤수", "", "워크인", "카드", "PT 10회", "결제완료"]);
+    expect(extracted).toContainEqual(["한회원", "2026-08-27", "2,750,000", "RE", "정윤수", "", "재등록", "카드", "PT 50회", "결제완료"]);
+  });
   it("keeps the legacy monthly FC layout when the FC marker is outside the header", () => {
     const rows = [
       ["FC 매출"],

@@ -110,7 +110,12 @@ export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain, 
         const amount = mappedAmount >= 0 ? mappedAmount : payment > marker.start ? payment - 1 : -1;
         const sectionHasOwnDates = entryRows.some((row) => row.slice(marker.start, end).some((cell) => monthDay(cell, year)));
         let currentDate = "";
+        let blockTrainer = sectionTrainer ?? "";
         for (const row of entryRows) {
+          const leadingTrainer = String(row[marker.start - 1] ?? "").trim();
+          if (marker.kind === "PT" && /^[가-힣]{2,6}$/.test(leadingTrainer) && exactField("registration", leadingTrainer) === null) {
+            blockTrainer = leadingTrainer;
+          }
           const sectionDate = row.slice(marker.start, end).find((cell) => monthDay(cell, year));
           const rawDate = sectionDate ?? (!sectionHasOwnDates ? row.find((cell) => monthDay(cell, year)) : undefined);
           currentDate = monthDay(rawDate, year) ?? currentDate;
@@ -121,7 +126,7 @@ export function extractRepeatedTables(rows: unknown[][], domain: MappingDomain, 
             : exactField("registration", header[name + 1]) === "registration_date" ? "회원권" : String(row[name + 1] ?? "").trim() || "회원권";
           const assignedTrainer = trainer >= 0 && String(row[trainer] ?? "").trim()
             ? row[trainer]
-            : sectionTrainer ?? "";
+            : blockTrainer;
           output.push([member, currentDate, paid, type >= 0 ? row[type] ?? "" : "", assignedTrainer, salesTrainer >= 0 ? row[salesTrainer] ?? "" : "", ...(includeAcquisition ? [acquisition >= 0 ? row[acquisition] ?? "" : ""] : []), payment >= 0 ? row[payment] ?? "" : "", `${marker.kind} ${plan}`, "결제완료"]);
         }
       }
