@@ -16,20 +16,21 @@
 }
 
 :root {
-  --surface-0: #12120f;
-  --surface-1: #1c1d18;
-  --surface-2: #252720;
-  --rail: #191a16;
-  --accent: #c9ff3f;
-  --accent-ink: #182000;
-  --text-1: #f2f1e9;
-  --text-2: #a9ada0;
-  --border: #35382f;
-  --success: #82d66f;
-  --warning: #f0b34b;
-  --danger: #ef6f61;
-  --info: #72a8ed;
-  --focus-ring: #d8ff73;
+  --surface-0: #f4efe6;
+  --surface-1: #fffcf6;
+  --surface-2: #ece4d7;
+  --rail: #242421;
+  --accent: #a97845;
+  --accent-strong: #76502d;
+  --accent-ink: #fffaf1;
+  --text-1: #24221f;
+  --text-2: #6e685f;
+  --border: rgb(73 64 52 / 18%);
+  --success: #50705b;
+  --warning: #a26632;
+  --danger: #a34d45;
+  --info: #526d80;
+  --focus-ring: #76502d;
   --font-ui: "Pretendard Variable", "Pretendard", Arial, sans-serif;
   --font-brand: "Archivo", Impact, sans-serif;
 }
@@ -64,6 +65,7 @@ a:focus-visible {
   padding: 28px 16px 20px;
   background: var(--rail);
   border-right: 1px solid var(--border);
+  color: #f7f1e7;
 }
 
 .brand-mark { display: inline-flex; align-items: baseline; gap: 7px; letter-spacing: -0.06em; }
@@ -74,11 +76,11 @@ a:focus-visible {
 
 .desktop-rail nav { display: grid; gap: 4px; }
 .desktop-rail nav a { border-radius: 6px; padding: 11px 12px; color: var(--text-2); font-size: .9rem; transition: background 140ms ease-out, color 140ms ease-out, transform 140ms ease-out; }
-.desktop-rail nav a:hover, .desktop-rail nav a:focus-visible, .desktop-rail nav a.is-current { background: var(--surface-2); color: var(--text-1); }
+.desktop-rail nav a:hover, .desktop-rail nav a:focus-visible, .desktop-rail nav a.is-current { background: #30302c; color: #f7f1e7; }
 .desktop-rail nav a:hover { transform: translateX(2px); }
 .desktop-rail nav a.is-current { box-shadow: inset 2px 0 0 var(--accent); }
 
-.rail-status { display: flex; align-items: center; gap: 8px; margin-top: auto; padding: 12px 8px 0; border-top: 1px solid var(--border); color: var(--text-2); font-size: .75rem; }
+.rail-status { display: flex; align-items: center; gap: 8px; margin-top: auto; padding: 12px 8px 0; border-top: 1px solid rgb(255 255 255 / 12%); color: #c8c0b5; font-size: .75rem; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgb(201 255 63 / 10%); }
 
 .shell-content { min-width: 0; }

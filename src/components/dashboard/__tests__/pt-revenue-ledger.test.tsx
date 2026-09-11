@@ -14,7 +14,7 @@ describe("PT revenue ledger", () => {
         { id: "t1", name: "정윤수", revenue: 3450000, newRevenue: 700000, renewedRevenue: 2750000, sourceRevenue: { OT: 600000, 필드: 100000 } },
         { id: "t2", name: "박세준", revenue: 1100000, newRevenue: 1100000, renewedRevenue: 0, sourceRevenue: { 필드: 1100000 } },
       ],
-    } as DashboardData;
+    } as unknown as DashboardData;
     render(<PtRevenueLedger data={data} />);
     expect(screen.getByRole("heading", { name: "PT 팀 매출" })).toBeVisible();
     expect(screen.getByRole("group", { name: "선택 기간 PT 매출" })).toHaveTextContent("7,450,000원");

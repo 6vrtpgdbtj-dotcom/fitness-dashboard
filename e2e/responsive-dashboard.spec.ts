@@ -7,10 +7,11 @@ for (const [name, width, height] of [["desktop", 1440, 900], ["tablet", 768, 102
       await page.setViewportSize({ width, height });
       await page.goto(`/demo?role=${role}`);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "PT 팀 매출", exact: true })).toBeInViewport();
       await page.evaluate(() => document.fonts.ready);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.getByRole("button", { name: "표로 보기" }).click();
-      await expect(page.getByRole("table", { name: "기간별 등록 매출" })).toBeVisible();
+      await expect(page.getByRole("table", { name: "기간별 PT 등록 매출" })).toBeVisible();
       await page.getByRole("button", { name: "표 닫기" }).click();
       const start = page.getByLabel("시작일");
       await start.focus();
@@ -51,6 +52,14 @@ test("reduced motion settles charts and disables skeleton shimmer", async ({ pag
   expect((await skeleton.boundingBox())!.height).toBeGreaterThanOrEqual(200);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: "output/playwright/mobile-loading-reduced-motion.png", fullPage: true });
+});
+
+test("hotel palette keeps the operational ledger high contrast", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/demo?role=admin");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(244, 239, 230)");
+  await expect(page.locator(".desktop-rail")).toHaveCSS("background-color", "rgb(36, 36, 33)");
+  await expect(page.locator(".pt-ledger-total strong")).toHaveCSS("color", "rgb(36, 34, 31)");
 });
 
 for (const [name, width, height] of [["desktop", 1440, 900], ["tablet", 768, 1024], ["mobile", 390, 844]] as const) {
