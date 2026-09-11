@@ -116,6 +116,27 @@ it("keeps organization-level FC revenue valid in column trainer mode", async () 
   await db.query("insert into sync_record_state(organization_id,source_connection_id,source_tab_id,domain,source_record_key,record) values($1,$2,$3,'registration','fc',$4)", [org, connection, tab, JSON.stringify({ record_status: "valid", values: { product: "FC 12개월" }, hints: {} })]);
   expect((await db.query("select trainer_id,record_status from registrations where source_record_key='fc'")).rows[0]).toEqual({ trainer_id: null, record_status: "valid" });
 });
+it("keeps unmatched PT revenue valid for team totals without granting trainer access", async () => {
+  await call("admin_trainer", [{ action: "assign", connectionId: connection, mode: "column" }]);
+  await db.query("insert into registrations(organization_id,source_connection_id,source_tab_id,source_record_key,registration_date,paid_amount,status,product,record_status) values($1,$2,$3,'unmatched-pt','2026-09-01',2100000,'paid','PT 40회','valid')", [org, connection, tab]);
+  await db.query("insert into sync_record_state(organization_id,source_connection_id,source_tab_id,domain,source_record_key,record) values($1,$2,$3,'registration','unmatched-pt',$4)", [org, connection, tab, JSON.stringify({ record_status: "valid", values: { product: "PT 40회" }, hints: { sales_trainer_name: "정윤수" } })]);
+  expect((await db.query("select trainer_id,record_status from registrations where source_record_key='unmatched-pt'")).rows[0]).toEqual({ trainer_id: null, record_status: "valid" });
+});
+it("replays past column hints when a matching trainer is invited", async () => {
+  await call("admin_trainer", [{ action: "assign", connectionId: connection, mode: "column" }]);
+  await db.query("insert into registrations(organization_id,source_connection_id,source_tab_id,source_record_key,registration_date,paid_amount,status,product,record_status) values($1,$2,$3,'past-sale','2026-08-03',1100000,'paid','PT 20회','valid')", [org, connection, tab]);
+  await db.query("insert into sync_record_state(organization_id,source_connection_id,source_tab_id,domain,source_record_key,record) values($1,$2,$3,'registration','past-sale',$4)", [org, connection, tab, JSON.stringify({ record_status: "valid", values: { product: "PT 20회" }, hints: { sales_trainer_name: "정윤수" } })]);
+  await call("admin_trainer", [{ action: "invite", email: "new@example.com", displayName: "정윤수", active: true }]);
+  expect((await db.query("select r.record_status,t.display_name from registrations r left join trainers t on t.id=r.trainer_id where r.source_record_key='past-sale'")).rows[0]).toEqual({ record_status: "valid", display_name: "정윤수" });
+});
+it("removes personal access but preserves valid PT revenue when a trainer is deactivated", async () => {
+  await call("admin_trainer", [{ action: "assign", connectionId: connection, mode: "column" }]);
+  await db.query("insert into registrations(organization_id,source_connection_id,source_tab_id,source_record_key,registration_date,paid_amount,status,product,record_status) values($1,$2,$3,'coach-sale','2026-09-01',900000,'paid','PT 20회','valid')", [org, connection, tab]);
+  await db.query("insert into sync_record_state(organization_id,source_connection_id,source_tab_id,domain,source_record_key,record) values($1,$2,$3,'registration','coach-sale',$4)", [org, connection, tab, JSON.stringify({ record_status: "valid", values: { product: "PT 20회" }, hints: { trainer_name: "Coach" } })]);
+  expect((await db.query("select trainer_id from registrations where source_record_key='coach-sale'")).rows[0]).toEqual({ trainer_id: trainer });
+  await call("admin_trainer", [{ action: "activate", trainerId: trainer, active: false }]);
+  expect((await db.query("select trainer_id,record_status from registrations where source_record_key='coach-sale'")).rows[0]).toEqual({ trainer_id: null, record_status: "valid" });
+});
 it("assigns PT revenue to the sales trainer before the assigned trainer", async () => {
   const salesTrainer = uid(30);
   await db.query("insert into trainers(id,organization_id,display_name,email) values($1,$2,'Sales Coach','sales@example.com')", [salesTrainer, org]);
