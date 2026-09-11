@@ -7,7 +7,10 @@ const identity = [
   field("external_member_id", "회원ID", ["회원번호", "고객번호", "고객ID", "member id"], ["identifier", "integer", "freeText"]),
   field("trainer_name", "담당트레이너", ["담당자", "담당코치", "트레이너", "코치"]),
 ];
-const acquisition = field("acquisition_source", "유입경로", ["가입경로", "유입채널", "방문경로"]);
+// Some real workbooks use lifecycle-looking labels (for example "재등록")
+// inside the acquisition/source column. The header determines the business
+// meaning here, so both ordinary text and status-shaped values are valid.
+const acquisition = field("acquisition_source", "유입경로", ["가입경로", "유입채널", "방문경로"], ["freeText", "status"]);
 const goal = field("exercise_goal", "운동목표", ["운동목적", "상담목적"]);
 const paid = field("paid_amount", "실결제금액", ["결제액", "매출", "결제금액", "실결제액", "입금액"], ["money", "integer"]);
 const registered = field("registered_sessions", "등록횟수", ["등록회차", "등록수업수", "등록세션", "세션"], ["integer"]);

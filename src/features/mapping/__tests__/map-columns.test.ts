@@ -63,6 +63,15 @@ describe("sheet column discovery", () => {
     expect(result.fields[2].reason).toBe("type-conflict");
   });
 
+  it("keeps sheet acquisition labels mapped even when a label such as 재등록 also looks like a status", () => {
+    const result = mapColumns(input([
+      ["회원명", "등록일", "매출", "유입경로"],
+      ["한예정", "2026-08-27", 2750000, "재등록"],
+      ["김수미", "2026-08-11", 1100000, "필드"],
+    ]), []);
+    expect(accepted(result, "acquisition_source")?.reason).toBe("accepted");
+  });
+
   it("returns missing fields for empty or title-only sheets without promoting data rows", () => {
     for (const rows of [[], [[], ["9월 회원 관리"]], [["김민수", 600000, "2026-09-01"]]]) {
       const result = mapColumns(input(rows), []);
