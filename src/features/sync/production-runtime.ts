@@ -85,6 +85,12 @@ export function getSyncService() {
         // an old administrator "unmapped" choice from the irregular source
         // layout would silently discard trainer/source columns after parsing.
         const mapping = mapColumns({ ...scope, rows, domain, tabTitle: tab.title }, generated ? [] : history);
+        if (generated && domain === "registration" && mapping.fields.some((field) => field.field === "trainer_name")) {
+          checked(await db.from("sheet_connections")
+            .update({ trainer_assignment_mode: "column", trainer_id: null })
+            .eq("id", connection.id)
+            .eq("organization_id", connection.organizationId));
+        }
         // Store accepted mapping decisions; sample values never enter history.
         const columns = { domain, headerRowIndex: mapping.headerRowIndex, fields: mapping.fields.map((field) => ({ sourceHeader: field.sourceHeader, field: field.field })) };
         let version = (versions ?? []).find((entry) => entry.mapping_fingerprint === mapping.mappingFingerprint && stableJson(entry.columns) === stableJson(columns));
