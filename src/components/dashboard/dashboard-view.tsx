@@ -15,6 +15,7 @@ import { RenewalTable } from "./renewal-table";
 import { SyncPulse } from "./sync-pulse";
 import { TodayClasses } from "./today-classes";
 import { number, percent, won } from "./format";
+import { PtRevenueLedger } from "./pt-revenue-ledger";
 
 export function DashboardView({
   data: initial,
@@ -169,14 +170,10 @@ export function DashboardView({
         </section>
       )}
       <DashboardMotion role={scope.role}>
+        <MotionSection className="dashboard-ledger">
+          <PtRevenueLedger data={data} />
+        </MotionSection>
         <MotionSection className="metrics-strip">
-          <MetricCard
-            label="선택 기간 PT 매출"
-            value={number(metrics.periodRevenue)}
-            unit="원"
-            detail={`전체 누적 ${won(metrics.totalRevenue)} · 환불 ${won(metrics.refunds)} 별도`}
-            accent
-          />
           <MetricCard
             label="선택 기간 FC 매출"
             value={number(metrics.fcRevenue)}
