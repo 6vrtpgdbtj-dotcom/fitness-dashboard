@@ -1,5 +1,6 @@
 import type { DashboardData } from "@/features/analytics/types";
 import { number, shortDate, statusLabel, won } from "./format";
+import { sortPeriodClasses } from "./class-order";
 export type DetailKind = "members" | "registrations" | "leads" | "classes";
 export const detailTitles: Record<DetailKind, string> = {
   members: "회원 관리",
@@ -85,11 +86,9 @@ export function DetailView({
                   statusLabel(row.status),
                 ],
               }))
-          : data.rows.classes
-              .filter((row) => inPeriod(row.class_date))
-              .sort((a, b) =>
-                (b.class_date ?? "").localeCompare(a.class_date ?? ""),
-              )
+          : sortPeriodClasses(
+              data.rows.classes.filter((row) => inPeriod(row.class_date)),
+            )
               .map((row) => ({
                 id: row.id,
                 cells: [

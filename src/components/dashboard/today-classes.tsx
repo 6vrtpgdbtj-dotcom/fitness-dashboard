@@ -1,5 +1,6 @@
 import { ArrowUpRight, Clock3 } from "lucide-react";
 import type { ClassRow, MemberSummary } from "@/features/analytics/types";
+import { sortTodayClasses } from "./class-order";
 
 export function TodayClasses({
   classes,
@@ -25,7 +26,7 @@ export function TodayClasses({
       </div>
       {classes.length ? (
         <ol className="today-list">
-          {classes.slice(0, 4).map((item) => (
+          {sortTodayClasses(classes).slice(0, 4).map((item) => (
             <li key={item.id}>
               <time dateTime={item.starts_at ?? today}>
                 {item.starts_at
