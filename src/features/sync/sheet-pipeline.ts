@@ -193,11 +193,15 @@ export function extractScheduleGrid(rows: unknown[][], tabTitle: string, spreads
   if (!month || !day || !/스케줄|일정|시간표/.test(spreadsheetTitle)) return rows;
   const year = Number(month[1]) < 100 ? 2000 + Number(month[1]) : Number(month[1]);
   const date = `${year}-${String(Number(month[2])).padStart(2, "0")}-${String(Number(day[0])).padStart(2, "0")}`;
-  const header = rows[0] ?? [];
+  const headerRowIndex = rows.findIndex((row, index) =>
+    index < 10 && row.some((cell) => typeof cell === "string" && /^[가-힣]{2,6}$/.test(cell.trim())),
+  );
+  if (headerRowIndex < 0) return rows;
+  const header = rows[headerRowIndex] ?? [];
   const trainers = header.flatMap((cell, columnIndex) => typeof cell === "string" && /^[가-힣]{2,6}$/.test(cell.trim()) ? [{ name: cell.trim(), columnIndex }] : []);
   if (!trainers.length) return rows;
   const output: unknown[][] = [["회원명", "수업일", "수업시작시간", "담당트레이너", "잔여횟수", "수업상태", "수업ID"]];
-  for (let rowIndex = 1; rowIndex < rows.length; rowIndex++) {
+  for (let rowIndex = headerRowIndex + 1; rowIndex < rows.length; rowIndex++) {
     const row = rows[rowIndex] ?? [];
     const rawTime = row.slice(0, trainers[0].columnIndex).find((cell) => typeof cell === "string" && /^\d{1,2}:\d{2}$/.test(cell.trim()));
     if (typeof rawTime !== "string") continue;
