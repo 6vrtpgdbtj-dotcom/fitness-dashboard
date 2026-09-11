@@ -261,14 +261,17 @@ main {
 }
 .metric-value {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 5px;
   align-items: baseline;
+  min-width: 0;
   margin: 0;
-  font-size: clamp(1.6rem, 2.6vw, 2.4rem);
+  font-size: clamp(1.2rem, 11cqw, 2.4rem);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+.metric-cell { container-type: inline-size; }
+.metric-type { min-width: 0; white-space: nowrap; }
 .metric-lead .metric-value {
   color: var(--accent);
 }
@@ -1326,7 +1329,7 @@ main {
   }
   .metric-value {
     gap: 4px;
-    font-size: clamp(1.5rem, 6.7vw, 2rem);
+    font-size: clamp(1.1rem, 11cqw, 2rem);
   }
   .metric-unit {
     font-size: 0.61rem;
@@ -1722,6 +1725,7 @@ main {
   font-size: clamp(1.25rem, 2vw, 1.8rem);
   letter-spacing: -.035em;
 }
+.pt-ledger-head { container-type: inline-size; }
 .pt-ledger-period {
   margin-top: 8px !important;
   color: var(--text-2);
@@ -1732,11 +1736,13 @@ main {
   align-items: baseline;
   gap: 7px;
   white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
   animation: ledger-settle 320ms 80ms ease-out both;
 }
 .pt-ledger-total strong {
   color: #24221f;
-  font: 650 clamp(2.45rem, 6vw, 5rem)/.95 var(--font-brand);
+  font: 650 clamp(2.2rem, 8cqw, 4.5rem)/.95 var(--font-brand);
   letter-spacing: -.065em;
   font-variant-numeric: tabular-nums;
 }
@@ -1767,6 +1773,8 @@ main {
   font-size: .7rem;
 }
 .pt-ledger-splits strong { font-size: .9rem; }
+.pt-ledger-splits strong,
+.pt-ledger-sources strong { min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
 .pt-ledger-unassigned { background: #f3eadf; }
 .pt-ledger-sources {
   position: relative;
@@ -1822,7 +1830,7 @@ main {
 .pt-ledger-trainer-name { font-weight: 700; }
 .pt-ledger-bar { height: 6px; overflow: hidden; background: #e4dacb; }
 .pt-ledger-bar i { display: block; height: 100%; background: linear-gradient(90deg, #76502d, #b98651); }
-.pt-ledger-trainers li > strong { font: 650 .86rem var(--font-brand); font-variant-numeric: tabular-nums; }
+.pt-ledger-trainers li > strong { min-width: 0; font: 650 .86rem var(--font-brand); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .pt-ledger-trainers small { grid-column: 2 / -1; }
 .metrics-strip {
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1878,15 +1886,16 @@ main {
   .pt-ledger { padding: 19px 16px; }
   .pt-ledger::after { top: 5px; right: 8px; font-size: 7rem; }
   .pt-ledger-head { display: grid; gap: 20px; }
-  .pt-ledger-total { white-space: normal; }
-  .pt-ledger-total strong { font-size: clamp(2.25rem, 12vw, 3.25rem); overflow-wrap: anywhere; }
+  .pt-ledger-total { white-space: nowrap; }
+  .pt-ledger-total strong { font-size: clamp(2rem, 12cqw, 3rem); letter-spacing: -.055em; }
   .pt-ledger-splits { grid-template-columns: 1fr 1fr; }
   .pt-ledger-splits > div { padding: 13px 10px; }
   .pt-ledger-splits > div:nth-child(2) { border-right: 0; }
   .pt-ledger-splits > div:nth-child(-n + 2) { border-bottom: 1px solid var(--border); }
   .pt-ledger-sources { display: grid; grid-template-columns: 1fr 1fr; }
   .pt-ledger-sources > span { min-width: 0; }
-  .pt-ledger-trainers li { grid-template-columns: 70px minmax(70px, 1fr) auto; gap: 7px 9px; }
+  .pt-ledger-trainers li { grid-template-columns: 62px minmax(52px, 1fr) minmax(0, auto); gap: 7px 7px; }
+  .pt-ledger-trainers li > strong { font-size: clamp(.68rem, 3.25vw, .82rem); }
   .pt-ledger-trainers small { font-size: .62rem; }
 }
 

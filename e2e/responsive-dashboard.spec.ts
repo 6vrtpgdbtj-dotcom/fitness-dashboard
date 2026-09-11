@@ -10,6 +10,16 @@ for (const [name, width, height] of [["desktop", 1440, 900], ["tablet", 768, 102
       await expect(page.getByRole("heading", { name: "PT 팀 매출", exact: true })).toBeInViewport();
       await page.evaluate(() => document.fonts.ready);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      const numericOverflow = await page.locator(".metric-cell, .pt-ledger").evaluateAll((panels) => panels.flatMap((panel) => {
+        const boundary = panel.getBoundingClientRect();
+        return [...panel.querySelectorAll<HTMLElement>(".metric-value, .pt-ledger-total, .pt-ledger-splits strong, .pt-ledger-sources strong, .pt-ledger-trainers li > strong")]
+          .filter((value) => {
+            const box = value.getBoundingClientRect();
+            return box.left < boundary.left - 1 || box.right > boundary.right + 1;
+          })
+          .map((value) => value.textContent?.trim() ?? "unknown");
+      }));
+      expect(numericOverflow, "numeric values stay inside their cards").toEqual([]);
       await page.getByRole("button", { name: "표로 보기" }).click();
       await expect(page.getByRole("table", { name: "기간별 PT 등록 매출" })).toBeVisible();
       await page.getByRole("button", { name: "표 닫기" }).click();
