@@ -149,3 +149,11 @@ Google fixture), then record only redacted results, never token values:
 Edge rate/payload limits and strict script CSP still require resolution or explicit
 operational acceptance; see numbered findings in `security-review.md`. No production
 security sign-off is implied by deterministic local tests.
+
+## 2026-09-11 final correction evidence
+
+- Actual Google sales workbook `중산점 매출`, `26.8` tab, range `A1:V35` was inspected against the parser. The visible source summary was PT `7,450,000원`, FC `13,309,400원`, total `21,504,400원`.
+- The sheet's side-by-side PT tables place a trainer name in the leading block cell and may omit it on following rows. Parser fixtures now cover this layout and carry the trainer context until the next explicit block owner.
+- The production Supabase migration `202609110001_preserve_team_revenue_assignment.sql` was applied successfully. Existing stored records were replayed so PT/FC team revenue remains valid even when a trainer is unmatched, while unique active trainer names/emails are assigned automatically.
+- Local browser QA passed `14/14` responsive Playwright journeys at 1440×900, 768×1024 and 390×844. Evidence images: `output/playwright/desktop-admin.png` and `output/playwright/mobile-admin.png`.
+- Unit/integration verification passed `43/43` files and `345/345` tests. ESLint, TypeScript checking, the Next.js production build and `git diff --check` completed with exit code 0.
